@@ -97,13 +97,6 @@ export default function HomeView({
 
       {/* Greetings Header Jumbotron */}
       <div className="p-6 lg:p-8 text-slate-800 dark:text-theme-on-accent hero-fade-up relative overflow-hidden">
-        <div className="absolute -top-12 -right-12 opacity-5 pointer-events-none">
-          <svg viewBox="0 0 200 200" width="220" height="220" aria-hidden>
-            <circle cx="100" cy="100" r="80" fill="none" stroke="currentColor" strokeWidth="1.5" />
-            <circle cx="100" cy="100" r="50" fill="none" stroke="currentColor" strokeWidth="1" />
-            <path d="M 60 100 L 100 60 L 140 100 L 100 140 Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
-          </svg>
-        </div>
         <div className="max-w-3xl w-full text-left">
           <span className="eyebrow px-3 py-1 rounded-full bounce-in inline-block text-xs font-semibold text-white" style={{ backgroundColor: "#10B981" }}>
             Clinical Portal Active
