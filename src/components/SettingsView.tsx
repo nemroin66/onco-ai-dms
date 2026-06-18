@@ -20,21 +20,18 @@ import {
   User,
   Save
 } from "lucide-react";
-import { PatientRecord } from "../types";
 import { apiFetch } from "../lib/api-client";
-import { getExportKeyOrder } from "../formManifest";
 import { confirmDialog, notify } from "./AppDialog";
 import { doc, setDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 
 interface SettingsViewProps {
   currentUser: { uid?: string; name: string; role: string; email?: string };
-  allPatients: PatientRecord[];
   onWipeDatabase: () => Promise<void>;
   onUpdateUser?: (updates: Partial<{ name: string }>) => void;
 }
 
-export default function SettingsView({ currentUser, allPatients, onWipeDatabase, onUpdateUser }: SettingsViewProps) {
+export default function SettingsView({ currentUser, onWipeDatabase, onUpdateUser }: SettingsViewProps) {
   
   // Profile editing state
   const [displayName, setDisplayName] = useState(currentUser.name);
@@ -81,60 +78,31 @@ export default function SettingsView({ currentUser, allPatients, onWipeDatabase,
     localStorage.setItem("theme", mode);
   };
 
-  // CSV/JSON overall database backups
-  const handleBackupAllJSON = async () => {
-    if (allPatients.length === 0) {
-      await notify("No patient records in the database registry to backup.", "No Records", "warning");
+  const downloadPatientExport = async (format: "csv" | "json") => {
+    const response = await apiFetch(`/api/patients/export?format=${format}`);
+    if (!response.ok) {
+      await notify("Could not export the patient registry.", "Export Failed", "danger");
       return;
     }
-    const keyOrder = getExportKeyOrder();
-    const serialized = JSON.stringify(allPatients, keyOrder, 2);
-    const blob = new Blob([serialized], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
+    const blob = await response.blob();
     const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    const disposition = response.headers.get("content-disposition") || "";
+    const fileName = disposition.match(/filename="([^"]+)"/)?.[1]
+      || `FullBackups_OncoRegistry_${new Date().toISOString().split("T")[0]}.${format}`;
     link.href = url;
-    link.download = `FullBackups_OncoRegistry_${new Date().toISOString().split("T")[0]}.json`;
+    link.download = fileName;
     link.click();
     URL.revokeObjectURL(url);
   };
 
+  // CSV/JSON overall database backups
+  const handleBackupAllJSON = async () => {
+    await downloadPatientExport("json");
+  };
+
   const handleBackupAllCSV = async () => {
-    if (allPatients.length === 0) {
-      await notify("No patient records in the database registry to backup.", "No Records", "warning");
-      return;
-    }
-
-    const headers = ["ID", "AutoID", "Title", "First_Name", "Last_Name", "BHT", "Clinic", "DOB", "Age", "Gender", "Oncology", "OverallStage", "TNM", "Status", "Hospital", "RegDate"];
-    const csvRows = [headers.join(",")];
-
-    allPatients.forEach((p) => {
-      const values = [
-        p.id,
-        p.auto_id || "",
-        p.title || "",
-        (p.first_name || "").replace(/,/g, " "),
-        (p.last_name || "").replace(/,/g, " "),
-        p.bht || "",
-        p.clinic || "",
-        p.dob || "",
-        p.age || "",
-        p.gender || "",
-        p.oncology || "",
-        p.overall_stage || "",
-        p.tnm_stage || "",
-        p.status || "",
-        (p.hospital || "").replace(/,/g, " "),
-        p.date || ""
-      ];
-      csvRows.push(values.map(v => `"${v}"`).join(","));
-    });
-
-    const csvContent = "data:text/csv;charset=utf-8," + csvRows.join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.href = encodedUri;
-    link.download = `FullBackups_OncoRegistry_${new Date().toISOString().split("T")[0]}.csv`;
-    link.click();
+    await downloadPatientExport("csv");
   };
 
   // Deep Wipe database

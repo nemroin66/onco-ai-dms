@@ -90,7 +90,7 @@ export interface ListCollectionOpts {
 const ALLOWED_QUERY_FIELDS = new Set([
   "createdBy", "isDeleted", "oncology", "bht", "updatedAt", "createdAt",
   "first_name", "last_name", "initials", "title", "auto_id", "nic", "tp",
-  "clinic", "hospital", "ward_no", "gender", "dob", "age", "patientId",
+  "clinic", "hospital", "ward_no", "gender", "dob", "age", "status", "patientId",
   "timestamp",
 ]);
 

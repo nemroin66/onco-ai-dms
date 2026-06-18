@@ -20,12 +20,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const isSearch = !!searchQuery;
       const oncologyFilter = String(req.query.oncology || "").trim();
       const bhtFilter = String(req.query.bht || "").trim();
+      const statusFilter = String(req.query.status || "").trim();
+      const hospitalFilter = String(req.query.hospital || "").trim();
       const limit = Math.min(Math.max(Number(req.query.limit) || 500, 1), 5000);
 
       const where: { field: string; op: any; value: any }[] = [];
       if (user.role !== "admin") where.push({ field: "createdBy", op: "==", value: user.uid });
       if (oncologyFilter) where.push({ field: "oncology", op: "==", value: oncologyFilter });
       if (bhtFilter) where.push({ field: "bht", op: "==", value: bhtFilter });
+      if (statusFilter) where.push({ field: "status", op: "==", value: statusFilter });
+      if (hospitalFilter) where.push({ field: "hospital", op: "==", value: hospitalFilter });
 
       let patients: Record<string, any>[];
       if (isSearch) {

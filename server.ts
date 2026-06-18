@@ -23,6 +23,7 @@ import {
 import { generateAnalyticsSpec, generateStatisticalSpec } from "./server-lib/analytics-prompt.js";
 import { cleanBody, patientSchema } from "./server-lib/validate.js";
 import { ensureDriveFolder, uploadToDrive } from "./server-lib/drive.js";
+import { buildPatientCsv, patientExportFileName } from "./server-lib/patient-export.js";
 
 dotenv.config();
 
@@ -656,15 +657,6 @@ app.delete("/api/analytics/dashboards/:id", async (req, res) => {
   }
 });
 
-app.get("/api/audit-logs", async (req, res) => {
-  try {
-    const handler = (await import("./server-lib/handlers/audit-logs.js")).default;
-    return handler(req as any, res as any);
-  } catch (error: any) {
-    apiError(res, error, 500, "Failed to fetch audit logs.");
-  }
-});
-
 app.post(["/api/extract", "/api/document-fill"], async (req, res) => {
   try {
     const patientId = String(req.body?.patientId || "");
@@ -687,17 +679,47 @@ app.post(["/api/extract", "/api/document-fill"], async (req, res) => {
 
 app.get("/api/patients/count", countPatients as any);
 
+app.get("/api/patients/export", async (req, res) => {
+  try {
+    const user = expressUser(req);
+    const patients = (await listCollection("patients"))
+      .filter((patient: any) => user.role === "admin" || !patient.createdBy || patient.createdBy === user.uid)
+      .sort((a: any, b: any) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
+    const format = String(req.query.format || "csv").toLowerCase();
+
+    if (format === "json") {
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="${patientExportFileName("json")}"`);
+      return res.send(JSON.stringify(patients, null, 2));
+    }
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${patientExportFileName("csv")}"`);
+    return res.send(buildPatientCsv(patients));
+  } catch (error: any) {
+    apiError(res, error, 500, "Patient export failed.");
+  }
+});
+
 app.get("/api/patients", async (req, res) => {
   try {
     const includeDeleted = String(req.query.includeDeleted || "").toLowerCase() === "true" || String(req.query.includeDeleted || "").trim() === "1";
     const searchQuery = String(req.query.search || "").trim().toLowerCase();
     const isSearch = !!searchQuery;
+    const oncologyFilter = String(req.query.oncology || "").trim();
+    const bhtFilter = String(req.query.bht || "").trim();
+    const statusFilter = String(req.query.status || "").trim();
+    const hospitalFilter = String(req.query.hospital || "").trim();
     const limit = Math.min(Math.max(Number(req.query.limit) || 500, 1), 5000);
     const patients = await listCollection("patients");
     const user = expressUser(req);
 
     let filteredPatients = (includeDeleted ? patients : patients.filter((p: any) => !p.isDeleted))
       .filter((p: any) => !p.createdBy || p.createdBy === user.uid || user.role === "admin");
+    if (oncologyFilter) filteredPatients = filteredPatients.filter((p: any) => p.oncology === oncologyFilter);
+    if (bhtFilter) filteredPatients = filteredPatients.filter((p: any) => p.bht === bhtFilter);
+    if (statusFilter) filteredPatients = filteredPatients.filter((p: any) => p.status === statusFilter);
+    if (hospitalFilter) filteredPatients = filteredPatients.filter((p: any) => p.hospital === hospitalFilter);
 
     if (isSearch) {
       const terms = searchQuery.split(/\s+/).filter(Boolean);

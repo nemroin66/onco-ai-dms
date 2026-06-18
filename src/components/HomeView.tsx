@@ -27,10 +27,13 @@ interface HomeViewProps {
   onNavigateMenu: (menu: "Home" | "Dashboard" | "Add Patient" | "Search Records" | "Settings") => void;
   onViewPatient: (patient: PatientRecord) => void;
   onEditPatient: (patient: PatientRecord) => void;
-  onDeletePatient: (id: string) => void;
+  onDeletePatient: (id: string, patient?: PatientRecord) => void;
   activeCount?: number;
   deletedCount?: number;
   onRefreshCounts?: () => void;
+  onLoadRecentRecords: () => void;
+  recentRecordsLoading?: boolean;
+  recentRecordsLoaded?: boolean;
 }
 
 export default function HomeView({ 
@@ -42,7 +45,10 @@ export default function HomeView({
   onDeletePatient,
   activeCount,
   deletedCount,
-  onRefreshCounts
+  onRefreshCounts,
+  onLoadRecentRecords,
+  recentRecordsLoading = false,
+  recentRecordsLoaded = false,
 }: HomeViewProps) {
 
   const [now, setNow] = useState(new Date());
@@ -200,17 +206,45 @@ export default function HomeView({
           <div>
             <h3 className="text-base font-bold text-slate-800 dark:text-theme-on-accent">Recently Admitted/Updated Patients</h3>
           </div>
-          <button 
-            id="btn-view-all-patients"
-            onClick={() => onNavigateMenu("Search Records")} 
-            className="text-xs font-semibold text-natural-accent dark:text-natural-gold hover:text-natural-accent-dark dark:hover:text-theme-on-accent hover:underline flex items-center gap-1 cursor-pointer"
-          >
-            <span>View all records</span>
-            <ArrowRight className="h-3 w-3" />
-          </button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button
+              id="btn-load-recent-patients"
+              type="button"
+              onClick={onLoadRecentRecords}
+              disabled={recentRecordsLoading}
+              className="inline-flex items-center gap-2 bg-natural-accent hover:bg-natural-accent-dark disabled:opacity-60 text-theme-on-accent px-3 py-2 rounded-xl text-xs font-semibold transition"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${recentRecordsLoading ? "animate-spin" : ""}`} />
+              <span>{recentRecordsLoading ? "Loading..." : "Recent 50"}</span>
+            </button>
+            <button
+              id="btn-view-all-patients"
+              onClick={() => onNavigateMenu("Search Records")}
+              className="text-xs font-semibold text-natural-accent dark:text-natural-gold hover:text-natural-accent-dark dark:hover:text-theme-on-accent hover:underline flex items-center gap-1 cursor-pointer"
+            >
+              <span>Search records</span>
+              <ArrowRight className="h-3 w-3" />
+            </button>
+          </div>
         </div>
 
-        {recentRecords.length === 0 ? (
+        {recentRecordsLoading ? (
+          <div className="py-12 p-5 text-center">
+            <div className="h-8 w-8 mx-auto rounded-full border-2 border-natural-accent border-t-transparent animate-spin"></div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-3 font-semibold">Loading recent records...</p>
+          </div>
+        ) : !recentRecordsLoaded ? (
+          <div className="py-12 p-5 text-center">
+            <button
+              type="button"
+              onClick={onLoadRecentRecords}
+              className="inline-flex items-center gap-2 bg-natural-accent hover:bg-natural-accent-dark text-theme-on-accent px-4 py-2.5 rounded-xl text-xs font-bold transition"
+            >
+              <RefreshCw className="h-4 w-4" />
+              <span>Load recent 50 records</span>
+            </button>
+          </div>
+        ) : recentRecords.length === 0 ? (
           <div className="py-12 p-5 text-center">
             <div className="flex justify-center text-slate-300 dark:text-slate-650 mb-3">
               <Inbox className="h-12 w-12" />
@@ -284,7 +318,7 @@ export default function HomeView({
                       </button>
                       <button
                         id={`btn-home-delete-${pat.id}`}
-                        onClick={() => onDeletePatient(pat.id)}
+                        onClick={() => onDeletePatient(pat.id, pat)}
                         className="btn-clr-delete inline-flex items-center gap-1 py-1 px-2.5 rounded-lg text-[11.5px] font-semibold transition-colors cursor-pointer"
                         title="Delete Patient Record"
                       >

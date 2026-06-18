@@ -11,11 +11,11 @@ import permanent from "../server-lib/handlers/patients/id/permanent.js";
 import restore from "../server-lib/handlers/patients/id/restore.js";
 import trash from "../server-lib/handlers/patients/trash.js";
 import count from "../server-lib/handlers/patients/count.js";
+import patientExport from "../server-lib/handlers/patients/export.js";
 import storage from "../server-lib/handlers/storage.js";
 import quota from "../server-lib/handlers/quota.js";
 import wipe from "../server-lib/handlers/wipe.js";
 import analytics from "../server-lib/handlers/analytics.js";
-import auditLogs from "../server-lib/handlers/audit-logs.js";
 import users from "../server-lib/handlers/users.js";
 import { requireAdmin, vercelAuth } from "../server-lib/auth.js";
 
@@ -48,13 +48,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return analytics(req, res);
   }
   if (route === "users") return users(req, res);
-  if (route === "audit-logs") return auditLogs(req, res);
   if (route === "quota") return quota(req, res);
   if (route === "chat") return chat(req, res);
   if (route === "extract" || route === "document-fill") return extract(req, res);
   if (route === "files") return files(req, res);
   if (route === "wipe") return wipe(req, res);
   if (route === "patients") return patients(req, res);
+  if (route === "patients/export") return patientExport(req, res);
   if (route === "patients/trash") return trash(req, res);
   if (route === "patients/count") return count(req, res);
   if (route === "storage") return storage(req, res);

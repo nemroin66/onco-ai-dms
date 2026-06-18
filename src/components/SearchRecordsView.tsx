@@ -19,7 +19,7 @@ import { apiFetch } from "../lib/api-client";
 interface SearchRecordsViewProps {
   onViewPatient: (pat: PatientRecord) => void;
   onEditPatient: (pat: PatientRecord) => void;
-  onDeletePatient: (id: string) => void;
+  onDeletePatient: (id: string, patient?: PatientRecord) => void;
 }
 
 export default function SearchRecordsView({ 
@@ -95,7 +95,15 @@ export default function SearchRecordsView({
     }
     setSearching(true);
     try {
-      const res = await apiFetch(`/api/patients?search=${encodeURIComponent(query)}&includeDeleted=false&limit=100`);
+      const params = new URLSearchParams({
+        search: query,
+        includeDeleted: "false",
+        limit: "100",
+      });
+      if (selectedOncology !== "All") params.set("oncology", selectedOncology);
+      if (selectedStatus !== "All") params.set("status", selectedStatus);
+      if (selectedHospital !== "All") params.set("hospital", selectedHospital);
+      const res = await apiFetch(`/api/patients?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
         setSearchResults(data);
@@ -369,7 +377,7 @@ export default function SearchRecordsView({
 
               <button
                 id={`btn-search-delete-${pat.id}`}
-                onClick={() => onDeletePatient(pat.id)}
+                onClick={() => onDeletePatient(pat.id, pat)}
                 className="btn-clr-delete inline-flex items-center justify-center p-2 rounded-xl transition-colors cursor-pointer"
                 title="Delete Record"
               >

@@ -17,11 +17,9 @@ import TrashView from "./components/TrashView";
 import { AppDialogProvider, confirmDialog, notify } from "./components/AppDialog";
 import HeroIntro from "./components/HeroIntro";
 import PageTransition from "./components/PageTransition";
-import { SkeletonPatientCard, SkeletonTable } from "./components/Skeleton";
 import type { DiskFile, PatientRecord, UserAccount } from "./types";
 
 const DashboardView = React.lazy(() => import("./components/DashboardView"));
-const AuditLogView = React.lazy(() => import("./components/AuditLogView"));
 
 function AppContent() {
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
@@ -55,100 +53,116 @@ function AppContent() {
     return () => unsub();
   }, []);
 
-   const [activeMenu, setActiveMenu] = useState<MenuType>("Home");
-   const [allPatients, setAllPatients] = useState<PatientRecord[]>([]);
-   const [deletedPatients, setDeletedPatients] = useState<PatientRecord[]>([]);
-   const [allFiles, setAllFiles] = useState<DiskFile[]>([]);
-   const [selectedPatient, setSelectedPatient] = useState<PatientRecord | null>(null);
-   const [patientUnderEdit, setPatientUnderEdit] = useState<PatientRecord | null>(null);
-   const [formDirty, setFormDirty] = useState(false);
-   const [isLoadingMain, setIsLoadingMain] = useState(false);
-   const [isLoadingFiles, setIsLoadingFiles] = useState(false);
-   const [filesLoaded, setFilesLoaded] = useState(false);
-   const [liveCounts, setLiveCounts] = useState<{ active: number; deleted: number; total: number } | null>(null);
-   const fetchReqIdRef = useRef(0);
-   const fileFetchReqIdRef = useRef(0);
+  const [activeMenu, setActiveMenu] = useState<MenuType>("Home");
+  const [allPatients, setAllPatients] = useState<PatientRecord[]>([]);
+  const [deletedPatients, setDeletedPatients] = useState<PatientRecord[]>([]);
+  const [allFiles, setAllFiles] = useState<DiskFile[]>([]);
+  const [selectedPatient, setSelectedPatient] = useState<PatientRecord | null>(null);
+  const [patientUnderEdit, setPatientUnderEdit] = useState<PatientRecord | null>(null);
+  const [formDirty, setFormDirty] = useState(false);
+  const [isLoadingMain, setIsLoadingMain] = useState(false);
+  const [recentPatientsLoaded, setRecentPatientsLoaded] = useState(false);
+  const [isLoadingFiles, setIsLoadingFiles] = useState(false);
+  const [filesLoaded, setFilesLoaded] = useState(false);
+  const [trashLoaded, setTrashLoaded] = useState(false);
+  const [liveCounts, setLiveCounts] = useState<{ active: number; deleted: number; total: number } | null>(null);
+  const fetchReqIdRef = useRef(0);
+  const fileFetchReqIdRef = useRef(0);
+  const trashFetchReqIdRef = useRef(0);
 
 
-// Force Matte Light as default — ignores browser/OS/prefers-color-scheme.
-useEffect(() => {
-  const mode = localStorage.getItem("theme") || "light";
-  document.documentElement.classList.toggle("dark", mode === "dark");
-  document.documentElement.dataset.themeMode = mode;
-}, []);
+  // Force Matte Light as default — ignores browser/OS/prefers-color-scheme.
+  useEffect(() => {
+    const mode = localStorage.getItem("theme") || "light";
+    document.documentElement.classList.toggle("dark", mode === "dark");
+    document.documentElement.dataset.themeMode = mode;
+  }, []);
 
-// Fetch all databases logs on session start
-useEffect(() => {
-  if (currentUser) {
-    fetchClinicalDatabase();
-  }
-}, [currentUser]);
-
-const handleRefreshCounts = useCallback(async () => {
-  try {
-    const res = await apiFetch("/api/patients/count");
-    if (res.ok) setLiveCounts(await res.json());
-  } catch (err) {
-    console.error("Failed to refresh patient counts:", err);
-  }
-}, []);
-
-const fetchClinicalDatabase = async () => {
-  const reqId = ++fetchReqIdRef.current;
-  setIsLoadingMain(true);
-  try {
-    const patRes = await apiFetch("/api/patients?includeDeleted=true&limit=50");
-    if (reqId !== fetchReqIdRef.current) return; // stale
-
-    if (patRes.ok) {
-      const patientsData = await patRes.json();
-      if (reqId !== fetchReqIdRef.current) return;
-      setAllPatients(patientsData.filter((p: PatientRecord) => !p.isDeleted));
-      setDeletedPatients(patientsData.filter((p: PatientRecord) => p.isDeleted));
+  const handleRefreshCounts = useCallback(async () => {
+    try {
+      const res = await apiFetch("/api/patients/count");
+      if (res.ok) setLiveCounts(await res.json());
+    } catch (err) {
+      console.error("Failed to refresh patient counts:", err);
     }
-  } catch (err) {
-    console.error("Clinical Server Fetch failed:", err);
-  } finally {
-    if (reqId === fetchReqIdRef.current) {
-      setIsLoadingMain(false);
+  }, []);
+
+  const fetchClinicalDatabase = async () => {
+    const reqId = ++fetchReqIdRef.current;
+    setIsLoadingMain(true);
+    try {
+      const patRes = await apiFetch("/api/patients?includeDeleted=false&limit=50");
+      if (reqId !== fetchReqIdRef.current) return; // stale
+
+      if (patRes.ok) {
+        const patientsData = await patRes.json();
+        if (reqId !== fetchReqIdRef.current) return;
+        setAllPatients(patientsData);
+        setRecentPatientsLoaded(true);
+      }
+    } catch (err) {
+      console.error("Clinical Server Fetch failed:", err);
+    } finally {
+      if (reqId === fetchReqIdRef.current) {
+        setIsLoadingMain(false);
+      }
     }
-  }
-};
+  };
 
-const fetchClinicalFiles = useCallback(async () => {
-  const reqId = ++fileFetchReqIdRef.current;
-  setIsLoadingFiles(true);
-  try {
-    const fileRes = await apiFetch("/api/files");
-    if (reqId !== fileFetchReqIdRef.current) return;
-    if (fileRes.ok) {
-      setAllFiles(await fileRes.json());
-      setFilesLoaded(true);
+  const fetchTrashPatients = useCallback(async () => {
+    const reqId = ++trashFetchReqIdRef.current;
+    try {
+      const patRes = await apiFetch("/api/patients/trash");
+      if (reqId !== trashFetchReqIdRef.current) return;
+      if (patRes.ok) {
+        setDeletedPatients(await patRes.json());
+        setTrashLoaded(true);
+      }
+    } catch (err) {
+      console.error("Trash fetch failed:", err);
     }
-  } catch (err) {
-    console.error("Clinical file metadata fetch failed:", err);
-  } finally {
-    if (reqId === fileFetchReqIdRef.current) {
-      setIsLoadingFiles(false);
+  }, []);
+
+  const fetchClinicalFiles = useCallback(async () => {
+    const reqId = ++fileFetchReqIdRef.current;
+    setIsLoadingFiles(true);
+    try {
+      const fileRes = await apiFetch("/api/files");
+      if (reqId !== fileFetchReqIdRef.current) return;
+      if (fileRes.ok) {
+        setAllFiles(await fileRes.json());
+        setFilesLoaded(true);
+      }
+    } catch (err) {
+      console.error("Clinical file metadata fetch failed:", err);
+    } finally {
+      if (reqId === fileFetchReqIdRef.current) {
+        setIsLoadingFiles(false);
+      }
     }
-  }
-}, []);
+  }, []);
 
-useEffect(() => {
-  if (currentUser && activeMenu === "Add Patient" && !filesLoaded && !isLoadingFiles) {
-    void fetchClinicalFiles();
-  }
-}, [activeMenu, currentUser, fetchClinicalFiles, filesLoaded, isLoadingFiles]);
+  useEffect(() => {
+    if (currentUser && activeMenu === "Add Patient" && !filesLoaded && !isLoadingFiles) {
+      void fetchClinicalFiles();
+    }
+  }, [activeMenu, currentUser, fetchClinicalFiles, filesLoaded, isLoadingFiles]);
 
-const handleLoginSuccess = useCallback((user: UserAccount) => {
-  setCurrentUser(user);
-}, []);
+  useEffect(() => {
+    if (currentUser && activeMenu === "Trash" && !trashLoaded) {
+      void fetchTrashPatients();
+    }
+  }, [activeMenu, currentUser, fetchTrashPatients, trashLoaded]);
 
-const handleSignOut = useCallback(async () => {
-  await logout();
-  setCurrentUser(null);
-  setActiveMenu("Home");
-}, []);
+  const handleLoginSuccess = useCallback((user: UserAccount) => {
+    setCurrentUser(user);
+  }, []);
+
+  const handleSignOut = useCallback(async () => {
+    await logout();
+    setCurrentUser(null);
+    setActiveMenu("Home");
+  }, []);
 
   // Create or Update Patient Record in database
   const handleSavePatient = async (record: PatientRecord): Promise<PatientRecord> => {
@@ -167,18 +181,17 @@ const handleSignOut = useCallback(async () => {
     }
 
     const savedRecord = await response.json();
-    
-    // Refresh lists
-    await fetchClinicalDatabase();
-    
+    setAllPatients((current) => [savedRecord, ...current.filter((patient) => patient.id !== savedRecord.id)].slice(0, 50));
+    setRecentPatientsLoaded(true);
+
     // Reset editing point
     setPatientUnderEdit(null);
     return savedRecord;
   };
 
   // Delete Patient dossiers atomically from DB and Google Drive Virtual Folder
-  const handleDeletePatient = async (id: string) => {
-    const pat = allPatients.find(p => p.id === id);
+  const handleDeletePatient = async (id: string, patient?: PatientRecord) => {
+    const pat = patient || allPatients.find(p => p.id === id) || (selectedPatient?.id === id ? selectedPatient : null);
     if (!pat) return;
 
     const confirmed = await confirmDialog(
@@ -196,8 +209,10 @@ const handleSignOut = useCallback(async () => {
 
         if (response.ok) {
           setSelectedPatient(null);
+          setAllPatients((current) => current.filter((patient) => patient.id !== id));
+          setDeletedPatients((current) => [{ ...pat, isDeleted: true, updatedAt: new Date().toISOString() }, ...current.filter((patient) => patient.id !== id)]);
+          setTrashLoaded(true);
           await notify("Patient moved to trash.", "Record Moved", "success");
-          await fetchClinicalDatabase();
         } else {
           await notify("Database permission limit. Only authorized clinicians can delete histories.", "Delete Failed", "danger");
         }
@@ -241,7 +256,12 @@ const handleSignOut = useCallback(async () => {
       method: "POST"
     });
     if (response.ok) {
-      await fetchClinicalDatabase();
+      setAllPatients([]);
+      setDeletedPatients([]);
+      setAllFiles([]);
+      setRecentPatientsLoaded(false);
+      setFilesLoaded(false);
+      setTrashLoaded(false);
     } else {
       throw new Error("Failed to purge db");
     }
@@ -292,7 +312,12 @@ const handleSignOut = useCallback(async () => {
       });
       if (response.ok) {
         await notify("Patient record successfully restored to active registry.", "Restore Success", "success");
-        await fetchClinicalDatabase();
+        const restored = await response.json().catch(() => null);
+        setDeletedPatients((current) => current.filter((patient) => patient.id !== id));
+        if (restored) {
+          setAllPatients((current) => [restored, ...current.filter((patient) => patient.id !== restored.id)].slice(0, 50));
+          setRecentPatientsLoaded(true);
+        }
       } else {
         throw new Error("Failed to restore patient.");
       }
@@ -324,7 +349,8 @@ const handleSignOut = useCallback(async () => {
         }
         
         await notify("Trash emptied. All deleted records have been permanently purged.", "Purge Success", "success");
-        await fetchClinicalDatabase();
+        setDeletedPatients([]);
+        setTrashLoaded(true);
       } catch (err) {
         console.error("Trash clear error:", err);
         let errorMessage = "Operation failed. Could not clear trash.";
@@ -353,7 +379,8 @@ const handleSignOut = useCallback(async () => {
       });
       if (response.ok) {
         await notify("Deleted record purged permanently.", "Purge Complete", "success");
-        await fetchClinicalDatabase();
+        setDeletedPatients((current) => current.filter((patient) => patient.id !== id));
+        setTrashLoaded(true);
       } else {
         throw new Error("Failed to permanently delete record.");
       }
@@ -383,23 +410,6 @@ const handleSignOut = useCallback(async () => {
       );
     }
 
-    if (isLoadingMain && allPatients.length === 0) {
-      return (
-        <div className="space-y-6 fade-in">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <SkeletonPatientCard />
-            <SkeletonPatientCard />
-            <SkeletonPatientCard />
-          </div>
-          <SkeletonTable rows={6} cols={5} />
-          <div className="text-center text-slate-400 text-xs font-semibold flex items-center justify-center gap-2">
-            <div className="h-3 w-3 rounded-full border-2 border-natural-accent border-t-transparent animate-spin"></div>
-            <span className="dots-loader">Fetching clinical parameters</span>
-          </div>
-        </div>
-      );
-    }
-
     const routeKey = `${activeMenu}-${patientUnderEdit?.id ?? "new"}-${selectedPatient?.id ?? "none"}`;
 
     switch (activeMenu) {
@@ -416,6 +426,9 @@ const handleSignOut = useCallback(async () => {
               activeCount={liveCounts?.active}
               deletedCount={liveCounts?.deleted}
               onRefreshCounts={handleRefreshCounts}
+              onLoadRecentRecords={fetchClinicalDatabase}
+              recentRecordsLoading={isLoadingMain}
+              recentRecordsLoaded={recentPatientsLoaded}
             />
           </PageTransition>
         );
@@ -466,18 +479,11 @@ const handleSignOut = useCallback(async () => {
             />
           </PageTransition>
         );
-      case "Audit Log":
-        return (
-          <PageTransition routeKey={routeKey} variant="fade">
-            <AuditLogView />
-          </PageTransition>
-        );
       case "Settings":
         return (
           <PageTransition routeKey={routeKey} variant="fade">
             <SettingsView
               currentUser={settingsUserProp}
-              allPatients={allPatients}
               onWipeDatabase={handleWipeDatabase}
               onUpdateUser={handleUpdateUser}
             />

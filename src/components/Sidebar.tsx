@@ -14,11 +14,10 @@ import {
   X,
   Activity,
   Trash2,
-  Shield,
 } from "lucide-react";
 import { UserAccount } from "../types";
 
-export type MenuType = "Home" | "Dashboard" | "Add Patient" | "Search Records" | "Settings" | "Trash" | "Audit Log";
+export type MenuType = "Home" | "Dashboard" | "Add Patient" | "Search Records" | "Settings" | "Trash";
 
 interface SidebarProps {
   activeMenu: MenuType;
@@ -36,7 +35,6 @@ export default function Sidebar({ activeMenu, onChangeMenu, currentUser, onSignO
     { name: "Add Patient" as MenuType, icon: UserPlus, color: "#8B5CF6" },
     { name: "Search Records" as MenuType, icon: Search, color: "#06B6D4" },
     { name: "Trash" as MenuType, icon: Trash2, color: "#F43F5E" },
-    { name: "Audit Log" as MenuType, icon: Shield, color: "#6366F1" },
     { name: "Settings" as MenuType, icon: Settings, color: "#F59E0B" },
   ];
 
