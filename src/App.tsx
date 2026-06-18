@@ -15,7 +15,6 @@ import PatientView from "./components/PatientView";
 import SettingsView from "./components/SettingsView";
 import TrashView from "./components/TrashView";
 import { AppDialogProvider, confirmDialog, notify } from "./components/AppDialog";
-import HeroIntro from "./components/HeroIntro";
 import PageTransition from "./components/PageTransition";
 import type { DiskFile, PatientRecord, UserAccount } from "./types";
 
@@ -24,12 +23,6 @@ const DashboardView = React.lazy(() => import("./components/DashboardView"));
 function AppContent() {
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
   const [authReady, setAuthReady] = useState(false);
-  const [showIntro, setShowIntro] = useState(true);
-  const [introDone, setIntroDone] = useState(() => sessionStorage.getItem("onc_intro_seen") === "1");
-
-  useEffect(() => {
-    if (introDone) setShowIntro(false);
-  }, [introDone]);
 
   useEffect(() => {
     const unsub = initAuth(async (firebaseUser) => {
@@ -273,12 +266,6 @@ function AppContent() {
     setActiveMenu("Home");
   }, []);
 
-  const handleHeroDone = useCallback(() => {
-    setShowIntro(false);
-    setIntroDone(true);
-    sessionStorage.setItem("onc_intro_seen", "1");
-  }, []);
-
   const handleUpdateUser = useCallback((updates: { name?: string; role?: "admin" | "user" }) => {
     if (updates.name) {
       setCurrentUser((prev) => prev ? { ...prev, name: updates.name! } : prev);
@@ -496,15 +483,6 @@ function AppContent() {
 
   return (
     <div className="min-h-screen max-w-full overflow-x-hidden bg-natural-bg text-natural-accent-dark transition-colors duration-200 flex flex-col antialiased relative">
-      {showIntro && (
-        <HeroIntro
-          appName="Oncology Data Manager"
-          tagline="Intelligent clinical dossiers at your fingertips"
-          duration={1700}
-          onDone={handleHeroDone}
-        />
-      )}
-
       {/* Sidebar Navigation */}
       <Sidebar
         activeMenu={activeMenu}
