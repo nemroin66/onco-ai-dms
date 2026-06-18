@@ -91,7 +91,18 @@ function normalizeGeminiError(error: any) {
   const status = Number(error?.status || error?.code || providerError.code || 0);
   const message = String(providerError.message || raw);
   const providerStatus = String(providerError.status || "");
-  const normalized = error as Error & { status?: number; code?: string; providerStatus?: string };
+  const retryDelay = providerError.details
+    ?.find((detail: any) => String(detail?.["@type"] || "").includes("RetryInfo"))
+    ?.retryDelay;
+  const retryAfterMs = retryDelay ? Math.max(0, Number.parseFloat(String(retryDelay).replace(/s$/, "")) * 1000) : 0;
+  const hasZeroLimit = /limit:\s*0/i.test(message);
+  const normalized = error as Error & {
+    status?: number;
+    code?: string;
+    providerStatus?: string;
+    retryAfterMs?: number;
+    retryable?: boolean;
+  };
 
   if (
     status === 404
@@ -102,6 +113,17 @@ function normalizeGeminiError(error: any) {
     normalized.code = "MODEL_UNAVAILABLE";
     normalized.providerStatus = providerStatus || "NOT_FOUND";
     normalized.message = message;
+  }
+
+  if (status === 429 || providerStatus === "RESOURCE_EXHAUSTED") {
+    normalized.status = 429;
+    normalized.code = hasZeroLimit ? "FREE_QUOTA_EXHAUSTED" : "RATE_LIMITED";
+    normalized.providerStatus = providerStatus || "RESOURCE_EXHAUSTED";
+    normalized.retryAfterMs = retryAfterMs;
+    normalized.retryable = !hasZeroLimit && retryAfterMs > 0;
+    normalized.message = hasZeroLimit
+      ? "Gemini free-tier quota is exhausted or unavailable for the current project/model. AI extraction cannot continue until quota resets, a different API project/key with free quota is used, or billing is enabled."
+      : `Gemini rate limit reached. Retry after ${Math.max(1, Math.ceil(retryAfterMs / 1000))} seconds.`;
   }
 
   return normalized;

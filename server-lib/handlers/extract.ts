@@ -39,7 +39,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(error?.status || 500).json({
       error: error?.status ? error.message : "AI document understanding failed.",
       code: error?.code || "",
-      retryable: status === 504 || status >= 500,
+      retryAfterMs: Number(error?.retryAfterMs || 0),
+      retryable: Boolean(error?.retryable) || status === 504 || status >= 500,
     });
   }
 }

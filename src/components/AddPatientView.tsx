@@ -2082,6 +2082,12 @@ export default function AddPatientView({
     return isUnavailableModel || /timeout|timed out|network|failed to fetch/i.test(message);
   };
 
+  const getAiRetryDelay = (error: any, attempt: number) => {
+    const serverDelay = error instanceof ApiError ? Number(error.body?.retryAfterMs || 0) : 0;
+    if (Number.isFinite(serverDelay) && serverDelay > 0) return Math.min(60_000, serverDelay + 1_000);
+    return Math.min(30_000, 5_000 + attempt * 2_500);
+  };
+
   const runAiDocumentFillUntilComplete = async (
     file: File,
     base64: string,
@@ -2127,10 +2133,10 @@ export default function AddPatientView({
           throw error;
         }
 
-        const waitMs = Math.min(30_000, 5_000 + attempt * 2_500);
+        const waitMs = getAiRetryDelay(error, attempt);
         console.warn("AI document understanding timed out; retrying with fallback model.", error);
         setExtractProgress(Math.min(78, 34 + attempt * 4));
-        setExtractStage(`AI model did not return usable output. Waiting ${Math.ceil(waitMs / 1000)}s, then continuing with the next fallback model.`);
+        setExtractStage(`AI model or free-tier quota is temporarily unavailable. Waiting ${Math.ceil(waitMs / 1000)}s, then continuing.`);
         await waitForAiRetry(waitMs);
         attempt += 1;
       }
@@ -2262,7 +2268,12 @@ export default function AddPatientView({
         } catch (error: any) {
           console.error("AI document understanding failed:", error);
           setExtractStage("AI extraction stopped before Drive upload");
-          await notify(error?.message || "AI could not complete extraction. The source document was not uploaded to Drive because AI filling did not finish.", "AI Fill Failed", "danger");
+          const isQuotaStop = error instanceof ApiError && error.body?.code === "FREE_QUOTA_EXHAUSTED";
+          await notify(
+            error?.message || "AI could not complete extraction. The source document was not uploaded to Drive because AI filling did not finish.",
+            isQuotaStop ? "Gemini Free Quota Exhausted" : "AI Fill Failed",
+            "danger"
+          );
           return;
         }
       }
