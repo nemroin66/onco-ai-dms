@@ -68,7 +68,7 @@ function AppContent() {
    const [selectedPatient, setSelectedPatient] = useState<PatientRecord | null>(null);
    const [patientUnderEdit, setPatientUnderEdit] = useState<PatientRecord | null>(null);
    const [isLoadingMain, setIsLoadingMain] = useState(false);
-   const [liveCounts, setLiveCounts] = useState({ active: 0, deleted: 0, total: 0 });
+    const [liveCounts, setLiveCounts] = useState<{ active: number; deleted: number; total: number } | null>(null);
 
 
   // Force Matte Light as default — ignores browser/OS/prefers-color-scheme.
@@ -85,19 +85,12 @@ function AppContent() {
     }
   }, [currentUser]);
 
-  // Poll lightweight count endpoint every 15s for live count badges
-  useEffect(() => {
-    if (!currentUser) return;
-    const poll = async () => {
-      try {
-        const res = await apiFetch("/api/patients/count");
-        if (res.ok) setLiveCounts(await res.json());
-      } catch {}
-    };
-    poll();
-    const id = setInterval(poll, 15_000);
-    return () => clearInterval(id);
-  }, [currentUser]);
+  const handleRefreshCounts = async () => {
+    try {
+      const res = await apiFetch("/api/patients/count");
+      if (res.ok) setLiveCounts(await res.json());
+    } catch {}
+  };
 
   const fetchClinicalDatabase = async () => {
     setIsLoadingMain(true);
@@ -359,8 +352,9 @@ function AppContent() {
               onViewPatient={handleViewPatient}
               onEditPatient={handleEditPatient}
               onDeletePatient={handleDeletePatient}
-              activeCount={liveCounts.active}
-              deletedCount={liveCounts.deleted}
+              activeCount={liveCounts?.active}
+              deletedCount={liveCounts?.deleted}
+              onRefreshCounts={handleRefreshCounts}
             />
           </PageTransition>
         );

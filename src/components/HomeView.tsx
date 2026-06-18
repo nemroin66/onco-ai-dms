@@ -17,6 +17,7 @@ import {
   Calendar,
   Clock,
   Users,
+  RefreshCw,
 } from "lucide-react";
 import { PatientRecord, UserAccount } from "../types";
 
@@ -29,6 +30,7 @@ interface HomeViewProps {
   onDeletePatient: (id: string) => void;
   activeCount?: number;
   deletedCount?: number;
+  onRefreshCounts?: () => void;
 }
 
 export default function HomeView({ 
@@ -39,7 +41,8 @@ export default function HomeView({
   onEditPatient, 
   onDeletePatient,
   activeCount,
-  deletedCount = 0
+  deletedCount,
+  onRefreshCounts
 }: HomeViewProps) {
 
   const [now, setNow] = useState(new Date());
@@ -107,7 +110,18 @@ export default function HomeView({
             </div>
             <div className="flex items-center gap-1.5">
               <Users className="h-4 w-4 text-slate-500 dark:text-slate-400" />
-              <span>Active: {activeCount ?? allPatients.length} · Deleted: {deletedCount} · Total: {(activeCount ?? allPatients.length) + deletedCount}</span>
+              {activeCount !== undefined ? (
+                <span>Active: {activeCount} · Deleted: {deletedCount ?? 0} · Total: {activeCount + (deletedCount ?? 0)}</span>
+              ) : (
+                <span className="text-slate-400">Record counts —</span>
+              )}
+              <button
+                onClick={onRefreshCounts}
+                className="ml-1 p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                title="Refresh patient counts"
+              >
+                <RefreshCw className="h-3.5 w-3.5 text-slate-400 hover:text-natural-accent" />
+              </button>
             </div>
 
           </div>
