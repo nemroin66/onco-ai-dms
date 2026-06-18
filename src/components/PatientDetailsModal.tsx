@@ -30,7 +30,8 @@ import {
   Scissors,
   HeartPulse,
   BedDouble,
-  Home
+  Home,
+  ExternalLink
 } from "lucide-react";
 import { PatientRecord, DiskFile, DefinitiveDiagnosisEntry } from "../types";
 import { notify } from "./AppDialog";
@@ -1309,22 +1310,36 @@ export default function PatientDetailsModal({
 	                  </div>
 	                ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {patientFiles.map((file) => (
-                      <div key={file.id} className="p-4 bg-slate-50 dark:bg-slate-900/35 border border-natural-border dark:border-slate-800 rounded-xl hover:border-natural-accent dark:hover:border-blue-500/55 transition">
+                    {patientFiles.map((file) => {
+                      const fileUrl = file.webViewLink || (file.driveFileId ? `https://drive.google.com/file/d/${file.driveFileId}/view` : null);
+                      return (
+                      <div
+                        key={file.id}
+                        onClick={() => fileUrl && window.open(fileUrl, "_blank", "noopener")}
+                        className={`p-4 border rounded-xl transition ${
+                          fileUrl
+                            ? "bg-slate-50 dark:bg-slate-900/35 border-natural-border dark:border-slate-800 hover:border-natural-accent dark:hover:border-blue-500/55 cursor-pointer"
+                            : "bg-slate-50 dark:bg-slate-900/35 border-natural-border dark:border-slate-800"
+                        }`}
+                      >
                         <div className="flex justify-between items-start gap-2">
-                          <div className="flex gap-2.5 min-w-0">
+                          <div className="flex gap-2.5 min-w-0 flex-1">
                             <div className="h-9 w-9 bg-natural-accent/10 dark:bg-natural-accent/20 text-natural-accent rounded-lg flex items-center justify-center flex-shrink-0 border border-natural-accent/30 text-xs">
                               <FileText className="h-5 w-5" />
                             </div>
-                            <div className="truncate text-xs">
+                            <div className="truncate text-xs flex-1">
                               <h4 className="font-bold text-slate-855 dark:text-slate-300 truncate" title={file.name}>{file.name}</h4>
                               <p className="text-[11.5px] text-slate-600 dark:text-slate-300 font-bold mt-0.5">Size: {(file.size / 1024).toFixed(1)} KB</p>
                               <p className="text-[9px] text-slate-655 dark:text-slate-250 font-semibold mt-0.5">Uploaded: {file.uploadDate}</p>
                             </div>
                           </div>
+                          {fileUrl && (
+                            <ExternalLink className="h-4 w-4 text-slate-400 flex-shrink-0 mt-2" />
+                          )}
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>

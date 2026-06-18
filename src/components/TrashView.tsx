@@ -7,6 +7,7 @@ import {
   History
 } from "lucide-react";
 import { PatientRecord } from "../types";
+import { confirmDialog } from "./AppDialog";
 
 interface TrashViewProps {
   allPatients: PatientRecord[];
@@ -38,7 +39,7 @@ export default function TrashView({
   }).sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 
   const handleClearTrash = async () => {
-    if (window.confirm("Are you sure you want to PERMANENTLY wipe all deleted records? This action cannot be undone and will purge all associated files from the secure storage.")) {
+    if (await confirmDialog("Are you sure you want to PERMANENTLY wipe all deleted records? This action cannot be undone and will purge all associated files from the secure storage.", "Permanently Wipe Trash", "danger", "Wipe Everything", "Cancel")) {
       setIsClearing(true);
       try {
         await onClearTrash();

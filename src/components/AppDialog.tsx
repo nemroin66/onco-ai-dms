@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { AlertTriangle, CheckCircle, Info, X } from "lucide-react";
 
 type DialogVariant = "info" | "success" | "warning" | "danger";
@@ -13,6 +13,14 @@ interface DialogRequest {
   confirmLabel?: string;
   cancelLabel?: string;
   resolve: (value: boolean) => void;
+}
+
+interface ToastItem {
+  id: string;
+  title: string;
+  message: string;
+  variant: DialogVariant;
+  leaving: boolean;
 }
 
 type DialogEvent = CustomEvent<Omit<DialogRequest, "id">>;
@@ -54,98 +62,155 @@ export const confirmDialog = (
   });
 };
 
-const variantStyles: Record<DialogVariant, { icon: React.ReactNode; tone: string; button: string }> = {
-  info: {
-    icon: <Info className="h-5 w-5" />,
-    tone: "text-natural-accent bg-natural-accent/10 border-natural-accent/25",
-    button: "bg-natural-accent hover:bg-natural-accent text-theme-on-accent",
-  },
-  success: {
-    icon: <CheckCircle className="h-5 w-5" />,
-    tone: "text-emerald-700 bg-emerald-500/10 border-emerald-500/25",
-    button: "bg-emerald-700 hover:bg-emerald-800 text-theme-on-accent",
-  },
-  warning: {
-    icon: <AlertTriangle className="h-5 w-5" />,
-    tone: "text-amber-700 bg-amber-500/10 border-amber-500/25",
-    button: "bg-amber-700 hover:bg-amber-800 text-theme-on-accent",
-  },
-  danger: {
-    icon: <AlertTriangle className="h-5 w-5" />,
-    tone: "text-rose-700 bg-rose-500/10 border-rose-500/25",
-    button: "bg-rose-700 hover:bg-rose-800 text-theme-on-accent",
-  },
+const toastIcon: Record<DialogVariant, React.ReactNode> = {
+  info: <Info className="h-3.5 w-3.5" />,
+  success: <CheckCircle className="h-3.5 w-3.5" />,
+  warning: <AlertTriangle className="h-3.5 w-3.5" />,
+  danger: <AlertTriangle className="h-3.5 w-3.5" />,
+};
+
+const toastBg: Record<DialogVariant, string> = {
+  info: "bg-natural-accent/10 border-natural-accent/25 text-natural-accent",
+  success: "bg-emerald-500/10 border-emerald-500/25 text-emerald-700 dark:text-emerald-300",
+  warning: "bg-amber-500/10 border-amber-500/25 text-amber-700 dark:text-amber-300",
+  danger: "bg-rose-500/10 border-rose-500/25 text-rose-700 dark:text-rose-300",
+};
+
+const confirmIcon: Record<DialogVariant, React.ReactNode> = {
+  info: <Info className="h-4 w-4" />,
+  success: <CheckCircle className="h-4 w-4" />,
+  warning: <AlertTriangle className="h-4 w-4" />,
+  danger: <AlertTriangle className="h-4 w-4" />,
+};
+
+const confirmTone: Record<DialogVariant, string> = {
+  info: "text-natural-accent bg-natural-accent/10 border-natural-accent/25",
+  success: "text-emerald-700 bg-emerald-500/10 border-emerald-500/25",
+  warning: "text-amber-700 bg-amber-500/10 border-amber-500/25",
+  danger: "text-rose-700 bg-rose-500/10 border-rose-500/25",
+};
+
+const confirmBtn: Record<DialogVariant, string> = {
+  info: "bg-natural-accent hover:bg-natural-accent text-white",
+  success: "bg-emerald-700 hover:bg-emerald-800 text-white",
+  warning: "bg-amber-700 hover:bg-amber-800 text-white",
+  danger: "bg-rose-700 hover:bg-rose-800 text-white",
 };
 
 export function AppDialogProvider({ children }: { children: React.ReactNode }) {
-  const [dialog, setDialog] = useState<DialogRequest | null>(null);
-  const [isClosing, setIsClosing] = useState(false);
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const [confirmReq, setConfirmReq] = useState<DialogRequest | null>(null);
+  const toastIdRef = useRef(0);
+
+  const addToast = useCallback((title: string, message: string, variant: DialogVariant) => {
+    const id = `toast_${++toastIdRef.current}`;
+    setToasts((prev) => [...prev, { id, title, message, variant, leaving: false }]);
+    // auto-dismiss after 3.5s
+    setTimeout(() => {
+      setToasts((prev) => prev.map((t) => (t.id === id ? { ...t, leaving: true } : t)));
+      setTimeout(() => {
+        setToasts((prev) => prev.filter((t) => t.id !== id));
+      }, 200);
+    }, 3500);
+  }, []);
+
+  const dismissToast = useCallback((id: string) => {
+    setToasts((prev) => prev.map((t) => (t.id === id ? { ...t, leaving: true } : t)));
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 200);
+  }, []);
 
   useEffect(() => {
     const onDialog = (event: Event) => {
       const detail = (event as DialogEvent).detail;
-      setIsClosing(false);
-      setDialog({
-        ...detail,
-        id: `dialog_${Date.now()}`,
-      });
+      if (detail.kind === "alert") {
+        addToast(detail.title, detail.message, detail.variant);
+        detail.resolve(true);
+      } else {
+        setConfirmReq({
+          ...detail,
+          id: `confirm_${Date.now()}`,
+        });
+      }
     };
     window.addEventListener("oncodb-dialog", onDialog);
     return () => window.removeEventListener("oncodb-dialog", onDialog);
-  }, []);
+  }, [addToast]);
 
-  const close = (value: boolean) => {
-    if (!dialog) return;
-    const currentDialog = dialog;
-    setIsClosing(true);
-    window.setTimeout(() => {
-      currentDialog.resolve(value);
-      setDialog(null);
-      setIsClosing(false);
-    }, 170);
+  const closeConfirm = (value: boolean) => {
+    if (!confirmReq) return;
+    confirmReq.resolve(value);
+    setConfirmReq(null);
   };
 
   return (
     <>
       {children}
-      {dialog && (
-        <div className={`fixed inset-0 z-[100] bg-slate-950/70 flex items-center justify-center p-4 ${isClosing ? "premium-dialog-backdrop-out" : "premium-dialog-backdrop-in"}`}>
-          <div className={`theme-dialog-shadow w-full max-w-md rounded-2xl bg-natural-bg dark:bg-slate-900 border border-natural-border dark:border-slate-700 overflow-hidden ${isClosing ? "premium-dialog-out" : "premium-dialog-in"}`}>
-            <div className="p-5 flex items-start gap-3">
-              <div className={`h-10 w-10 rounded-xl border flex items-center justify-center flex-shrink-0 ${variantStyles[dialog.variant].tone}`}>
-                {variantStyles[dialog.variant].icon}
+
+      {/* Toast stack — top-right, compact */}
+      <div className="fixed top-3 right-3 z-[100] flex flex-col gap-1.5 pointer-events-none">
+        {toasts.map((t) => (
+          <div
+            key={t.id}
+            className={`pointer-events-auto flex items-start gap-2 px-2.5 py-2 rounded-lg border shadow-md min-w-[200px] max-w-[320px] ${toastBg[t.variant]} ${
+              t.leaving ? "opacity-0 translate-x-4" : "opacity-100 translate-x-0"
+            } transition-all duration-200`}
+          >
+            <span className="mt-0.5 flex-shrink-0">{toastIcon[t.variant]}</span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-bold leading-tight truncate">{t.title}</p>
+              <p className="text-[10px] leading-tight mt-0.5 opacity-80 line-clamp-2">{t.message}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => dismissToast(t.id)}
+              className="p-0.5 rounded flex-shrink-0 opacity-60 hover:opacity-100 transition-opacity"
+              aria-label="Dismiss"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {/* Confirm dialog — compact overlay, no backdrop */}
+      {confirmReq && (
+        <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh] pointer-events-none">
+          <div className="pointer-events-auto theme-dialog-shadow w-full max-w-xs rounded-xl bg-natural-bg dark:bg-slate-900 border border-natural-border dark:border-slate-700 overflow-hidden premium-dialog-in">
+            <div className="p-3.5 flex items-start gap-2.5">
+              <div className={`h-7 w-7 rounded-lg border flex items-center justify-center flex-shrink-0 ${confirmTone[confirmReq.variant]}`}>
+                {confirmIcon[confirmReq.variant]}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="flex items-start justify-between gap-3">
-                  <h3 className="text-sm font-bold text-slate-850 dark:text-theme-on-accent ">{dialog.title}</h3>
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="text-xs font-bold text-slate-850 dark:text-theme-on-accent">{confirmReq.title}</h3>
                   <button
                     type="button"
-                    onClick={() => close(false)}
-                    className="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-theme-on-accent hover:bg-slate-100 dark:hover:bg-slate-800"
-                    aria-label="Close dialog"
+                    onClick={() => closeConfirm(false)}
+                    className="p-0.5 rounded text-slate-400 hover:text-slate-700 dark:hover:text-theme-on-accent hover:bg-slate-100 dark:hover:bg-slate-800"
+                    aria-label="Close"
                   >
-                    <X className="h-4 w-4" />
+                    <X className="h-3.5 w-3.5" />
                   </button>
                 </div>
-                <p className="mt-2 text-xs leading-relaxed whitespace-pre-line text-slate-700 dark:text-slate-250">{dialog.message}</p>
+                <p className="mt-1.5 text-[11px] leading-relaxed whitespace-pre-line text-slate-700 dark:text-slate-250">{confirmReq.message}</p>
               </div>
             </div>
-            <div className="px-5 py-4 bg-theme-surface dark:bg-slate-950 border-t border-natural-border/70 dark:border-slate-800 flex justify-end gap-2">
-              {dialog.kind === "confirm" && (
-                <button
-                  type="button"
-                  onClick={() => close(false)}
-                  className="px-4 py-2 rounded-xl border border-natural-border dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-250 hover:bg-theme-surface dark:hover:bg-slate-800"
-                >
-                  {dialog.cancelLabel || "Cancel"}
-                </button>
-              )}
+            <div className="px-3.5 py-2.5 bg-theme-surface dark:bg-slate-950 border-t border-natural-border/70 dark:border-slate-800 flex justify-end gap-1.5">
               <button
                 type="button"
-                onClick={() => close(true)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold ${variantStyles[dialog.variant].button}`}
+                onClick={() => closeConfirm(false)}
+                className="px-3 py-1.5 rounded-lg border border-natural-border dark:border-slate-700 text-[10px] font-bold text-slate-700 dark:text-slate-250 hover:bg-theme-surface dark:hover:bg-slate-800"
               >
-                {dialog.confirmLabel || "OK"}
+                {confirmReq.cancelLabel || "Cancel"}
+              </button>
+              <button
+                type="button"
+                onClick={() => closeConfirm(true)}
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold ${confirmBtn[confirmReq.variant]}`}
+              >
+                {confirmReq.confirmLabel || "OK"}
               </button>
             </div>
           </div>

@@ -1236,6 +1236,9 @@ export interface DiskFile {
   extracted: boolean;
   contentBase64?: string; // stored for simulation/download
   isDeleted?: boolean;
+  webViewLink?: string;
+  webContentLink?: string;
+  driveFileId?: string;
 }
 
 export interface UserAccount {

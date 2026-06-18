@@ -20,6 +20,7 @@ import {
   CheckCircle,
   File,
   Download,
+  ExternalLink,
   RefreshCw,
   Pill,
   Radio,
@@ -55,7 +56,7 @@ import {
   OtherAnthropometricGroup,
   DiskFile
 } from "../types";
-import { notify } from "./AppDialog";
+import { confirmDialog, notify } from "./AppDialog";
 import AnimatedButton from "./AnimatedButton";
 import { getSectionFieldKeys } from "../formManifest";
 import MANIFEST from "../formManifest";
@@ -491,18 +492,6 @@ export default function AddPatientView({
 
   const isDirtyRef = React.useRef(false);
 
-  // Warn on browser back/refresh when form is dirty
-  React.useEffect(() => {
-    const handler = (e: BeforeUnloadEvent) => {
-      if (isDirtyRef.current) {
-        e.preventDefault();
-        e.returnValue = "";
-      }
-    };
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, []);
-
   // Mark form dirty on any state change, reset after save
   const markDirty = React.useCallback(() => {
     if (!isDirtyRef.current) {
@@ -517,8 +506,11 @@ export default function AddPatientView({
   }, [onDirtyChange]);
 
   // Confirm before leaving with unsaved changes
-  const handleNavigateHome = React.useCallback(() => {
-    if (isDirtyRef.current && !window.confirm("You have unsaved changes. Are you sure you want to leave without saving?")) return;
+  const handleNavigateHome = React.useCallback(async () => {
+    if (isDirtyRef.current) {
+      const leave = await confirmDialog("You have unsaved changes. Are you sure you want to leave without saving?", "Unsaved Changes", "warning", "Leave", "Stay");
+      if (!leave) return;
+    }
     onNavigateHome();
   }, [onNavigateHome]);
 
@@ -2808,87 +2800,81 @@ export default function AddPatientView({
             )}
           </div>
 
-          {/* Google Drive file repository for this patient */}
-          <div className="minimal-card rounded-2xl p-5 flex flex-col justify-between">
+          {/* Google Drive file repository for this patient — sticky top bar */}
+          <div className="sticky top-0 z-20 minimal-card rounded-2xl p-4 flex flex-col justify-between shadow-sm">
             <div>
-              <div className="flex justify-between items-center border-b border-natural-border/45 pb-3 mb-4">
+              <div className="flex justify-between items-center border-b border-natural-border/45 pb-2 mb-3">
                 <div className="flex items-center gap-2">
-                  <Folder className="h-5 w-5 text-natural-brown" />
-                  <h3 className="h-section">Google Drive Vault</h3>
+                  <Folder className="h-4 w-4 text-natural-brown" />
+                  <h3 className="text-xs font-bold text-slate-700 dark:text-slate-300">Drive Vault</h3>
                 </div>
                 <span className="text-[9px] font-bold bg-slate-50 dark:bg-slate-900 border border-natural-border/45 dark:border-slate-800 text-slate-700 dark:text-slate-200 py-0.5 px-2 rounded-md">
-                  Folders Synchronized
+                  {patientFiles.length} file{patientFiles.length !== 1 ? "s" : ""}
                 </span>
               </div>
 
-	              <div className="space-y-3 max-h-48 overflow-y-auto pr-1">
-                <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300 text-[11.5px] ">
-                  <span>Drive</span>
-                  <span>&gt;</span>
-                  <span className="text-natural-accent font-semibold truncate hover:underline">
-                    {formState.last_name || formState.first_name
-                      ? `${formState.first_name || ""}_${formState.last_name || ""}`.replace(" ", "_")
-                      : "temp_patient_folder"
-                    }
-                  </span>
-                </div>
-
-	                {patientFiles.length === 0 ? (
-	                  <div className="text-center py-8 text-slate-600 dark:text-slate-300 border border-dashed border-natural-border dark:border-slate-700 rounded-xl">
-	                    <File className="h-8 w-8 mx-auto text-natural-border/80 mb-1 animate-pulse" />
-	                    <p className="text-[11.5px]">Folder is empty.</p>
-	                    <p className="text-[9px] mt-1 text-slate-500 dark:text-slate-400">Upload non-AI media after saving the patient record.</p>
-	                  </div>
-	                ) : (
-                  <div className="space-y-1.5">
-                    {patientFiles.map((file) => (
-                      <div key={file.id} className="flex justify-between items-center bg-slate-55 dark:bg-slate-900/30 p-2 rounded-lg border border-natural-border/50 dark:border-slate-800 text-[11.5px] group">
-                        <div className="flex items-center gap-2 min-w-0 pr-2">
-                          <FileText className="h-3.5 w-3.5 text-natural-accent flex-shrink-0" />
-                          <div className="truncate">
-                            <p className="font-bold text-slate-700 dark:text-slate-305 truncate" title={file.name}>{file.name}</p>
-                            <p className="text-[9px] text-slate-600 dark:text-slate-300">{(file.size / 1024).toFixed(1)} KB • {file.uploadDate}</p>
-              </div>
-
-            </div>
+              <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1 mb-2">
+                {patientFiles.length === 0 ? (
+                  <div className="text-center py-4 text-slate-500 dark:text-slate-400 border border-dashed border-natural-border dark:border-slate-700 rounded-xl">
+                    <File className="h-6 w-6 mx-auto text-natural-border/80 mb-1" />
+                    <p className="text-[10px]">No files uploaded yet.</p>
+                  </div>
+                ) : (
+                  patientFiles.map((file) => {
+                    const fileUrl = file.webViewLink || (file.driveFileId ? `https://drive.google.com/file/d/${file.driveFileId}/view` : null);
+                    return (
+                      <div
+                        key={file.id}
+                        onClick={() => fileUrl && window.open(fileUrl, "_blank", "noopener")}
+                        className={`flex items-center gap-2 p-1.5 rounded-lg border text-[10.5px] group transition-colors ${
+                          fileUrl
+                            ? "border-natural-border/50 dark:border-slate-800 hover:border-natural-accent dark:hover:border-natural-accent bg-slate-55 dark:bg-slate-900/30 hover:bg-natural-accent/5 dark:hover:bg-natural-accent/10 cursor-pointer"
+                            : "border-natural-border/50 dark:border-slate-800 bg-slate-55 dark:bg-slate-900/30"
+                        }`}
+                        title={fileUrl ? "Click to view file" : file.name}
+                      >
+                        <FileText className="h-3.5 w-3.5 text-natural-accent flex-shrink-0" />
+                        <span className="truncate flex-1 font-semibold text-slate-700 dark:text-slate-305">{file.name}</span>
                         {file.extracted && (
-                          <span className="bg-natural-accent/10 border border-natural-accent/20 text-natural-accent-dark dark:text-natural-hover text-[9px] px-1 py-0.5 rounded flex-shrink-0">
-                            AI-filled
+                          <span className="bg-natural-accent/10 border border-natural-accent/20 text-natural-accent-dark dark:text-natural-hover text-[8px] px-1 py-0.5 rounded flex-shrink-0 leading-none">
+                            AI
                           </span>
                         )}
+                        {fileUrl && (
+                          <ExternalLink className="h-3 w-3 text-slate-400 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        )}
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })
                 )}
               </div>
-
             </div>
 
-	            <div className="mt-4 pt-3 border-t border-natural-border/45 dark:border-natural-border text-[11.5px] text-slate-600 dark:text-slate-350 font-semibold space-y-3">
-	              <input
-	                type="file"
-	                ref={vaultFileInputRef}
-	                onChange={async (e) => {
-	                  const file = e.target.files?.[0];
-	                  if (file) await processAttachment(file, true);
-	                  e.target.value = "";
-	                }}
-	                className="hidden"
-	                accept={DRIVE_DOCUMENT_ACCEPT}
-	              />
-	              <button
-	                type="button"
-	                onClick={() => vaultFileInputRef.current?.click()}
-	                disabled={isVaultUploading}
-	                className="w-full inline-flex items-center justify-center gap-2 bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-bold py-2 px-3 rounded-xl transition disabled:opacity-60"
-	              >
-	                {isVaultUploading ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-	                <span>{isVaultUploading ? "Uploading to Vault..." : "Upload Without AI Fill"}</span>
-	              </button>
-              {isVaultUploading && (
-                <StageProgressBar value={vaultProgress} label={vaultStage || "Uploading to Google Drive"} tone="drive" />
-              )}
+            <div className="flex gap-2 text-[11px]">
+              <input
+                type="file"
+                ref={vaultFileInputRef}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (file) await processAttachment(file, true);
+                  e.target.value = "";
+                }}
+                className="hidden"
+                accept={DRIVE_DOCUMENT_ACCEPT}
+              />
+              <button
+                type="button"
+                onClick={() => vaultFileInputRef.current?.click()}
+                disabled={isVaultUploading}
+                className="flex-1 inline-flex items-center justify-center gap-1.5 bg-violet-600 hover:bg-violet-700 disabled:opacity-60 text-white font-bold text-[10.5px] py-2 rounded-xl transition-all cursor-pointer"
+              >
+                {isVaultUploading ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                <span>{isVaultUploading ? "Uploading..." : "Upload File"}</span>
+              </button>
             </div>
+            {isVaultUploading && (
+              <StageProgressBar value={vaultProgress} label={vaultStage || "Uploading..."} tone="drive" />
+            )}
           </div>
 
         </div>

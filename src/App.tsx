@@ -459,7 +459,7 @@ function AppContent() {
         onChangeMenu={async (menu) => {
           // Warn before leaving unsaved form
           if (formDirty) {
-            const leave = window.confirm("You have unsaved changes. Are you sure you want to leave without saving?");
+            const leave = await confirmDialog("You have unsaved changes. Are you sure you want to leave without saving?", "Unsaved Changes", "warning", "Leave", "Stay");
             if (!leave) return;
           }
           // Close patient viewer and discard edits when navigating away
