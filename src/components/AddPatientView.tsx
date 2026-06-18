@@ -133,6 +133,74 @@ const formatFileSize = (size: number) => {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 };
 
+const humanizeBackupKey = (key: string) => (
+  key
+    .replace(/Table$/, "")
+    .replace(/_/g, " ")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase())
+);
+
+const formatBackupMiniValue = (value: any): string => {
+  if (value === undefined || value === null) return "";
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) {
+    return value
+      .filter((item) => item !== undefined && item !== null && String(typeof item === "object" ? JSON.stringify(item) : item).trim() !== "")
+      .map((item) => formatBackupMiniValue(item))
+      .filter(Boolean)
+      .join(" | ");
+  }
+  if (typeof value === "object") {
+    return Object.entries(value)
+      .filter(([, childValue]) => childValue !== undefined && childValue !== null && formatBackupMiniValue(childValue))
+      .map(([childKey, childValue]) => `${humanizeBackupKey(childKey)}: ${formatBackupMiniValue(childValue)}`)
+      .join("; ");
+  }
+  return String(value);
+};
+
+const parseBackupMiniSummary = (raw: string) => {
+  let parsed: any = null;
+  try {
+    parsed = raw ? JSON.parse(raw) : null;
+  } catch {
+    parsed = null;
+  }
+
+  const fields = parsed?.data && typeof parsed.data === "object"
+    ? Object.entries(parsed.data)
+        .filter(([, value]) => formatBackupMiniValue(value))
+        .slice(0, 12)
+        .map(([key, value]) => ({
+          label: humanizeBackupKey(key),
+          value: formatBackupMiniValue(value).slice(0, 220),
+        }))
+    : [];
+
+  const changes = Array.isArray(parsed?.proposedChanges)
+    ? parsed.proposedChanges.slice(0, 8).map((change: any) => ({
+        target: humanizeBackupKey(String(change?.target || "Review")),
+        action: humanizeBackupKey(String(change?.action || "Fill")),
+        evidence: String(change?.evidence?.quote || ""),
+      }))
+    : [];
+
+  const suggestions = Array.isArray(parsed?.suggestedElsewhere)
+    ? parsed.suggestedElsewhere.slice(0, 6).map((suggestion: any) => ({
+        target: humanizeBackupKey(String(suggestion?.candidateTarget || suggestion?.sourceKey || "Suggested Field")),
+        detail: formatBackupMiniValue(suggestion?.detail ?? suggestion?.value ?? "").slice(0, 220),
+        reason: String(suggestion?.reason || ""),
+      }))
+    : [];
+
+  const reviewIssues = Array.isArray(parsed?.reviewIssues) ? parsed.reviewIssues.map(String).slice(0, 6) : [];
+  return { fields, changes, suggestions, reviewIssues };
+};
+
 type SubTableProps = {
   title: string;
   accent: string;
@@ -593,7 +661,7 @@ export default function AddPatientView({
     followUpPrognosis: true,
     oncologicalOutcome: true,
     supplementary: true,
-    documentExtractions: true,
+    documentExtractions: false,
     treatments: true,
     surgicalProcedures: true,
     care: true,
@@ -3319,34 +3387,84 @@ export default function AddPatientView({
           {openSections.documentExtractions && (
             <div className="p-5 space-y-5">
               <p className="text-[11.5px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                Each AI document fill is backed up here with the document name, date, and full form-ready JSON. These records are never overwritten — every AI run appends a new entry. Review and manually transfer any values that were not auto-filled into the form above.
+                Each AI document fill is backed up here with the document name, date, and a readable table-card summary. The complete extraction payload is still preserved inside the record, but this view avoids raw JSON.
               </p>
               <div className="space-y-3">
-                {(formState.document_extraction_backups || []).map((entry: any, idx: number) => (
-                  <div key={idx} className="border border-slate-200 dark:border-slate-700/85 rounded-xl p-4 space-y-3">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <label className="block text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Document</label>
-                        <input type="text" value={entry.document_name} onChange={(e) => handleTableChange("document_extraction_backups", idx, "document_name", e.target.value)} className="w-full p-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs" />
-                      </div>
-                      <div className="w-40">
-                        <label className="block text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Date</label>
-                        <input type="date" value={entry.extraction_date} onChange={(e) => handleTableChange("document_extraction_backups", idx, "extraction_date", e.target.value)} className="w-full p-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs" />
-                      </div>
-                      {entry.file_reference ? (
-                        <div className="shrink-0 pt-5">
-                          <a href={entry.file_reference} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:underline text-xs font-medium">
+                {(formState.document_extraction_backups || []).map((entry: any, idx: number) => {
+                  const backupSummary = parseBackupMiniSummary(entry.raw_extracted_data || "");
+                  return (
+                    <div key={idx} className="border border-slate-200 dark:border-slate-700/85 rounded-xl p-4 space-y-3 bg-white/60 dark:bg-slate-950/20">
+                      <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_10rem_7rem] gap-3 flex-1">
+                          <div>
+                            <label className="block text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Document</label>
+                            <input type="text" value={entry.document_name} onChange={(e) => handleTableChange("document_extraction_backups", idx, "document_name", e.target.value)} className="w-full p-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs" />
+                          </div>
+                          <div>
+                            <label className="block text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Date</label>
+                            <input type="date" value={entry.extraction_date} onChange={(e) => handleTableChange("document_extraction_backups", idx, "extraction_date", e.target.value)} className="w-full p-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs" />
+                          </div>
+                          <div>
+                            <label className="block text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Time</label>
+                            <input type="text" value={entry.extraction_time || ""} onChange={(e) => handleTableChange("document_extraction_backups", idx, "extraction_time", e.target.value)} className="w-full p-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs" />
+                          </div>
+                        </div>
+                        {entry.file_reference ? (
+                          <a href={entry.file_reference} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:underline text-xs font-medium lg:pt-6">
                             <FileText className="h-3 w-3" /> View File
                           </a>
+                        ) : null}
+                      </div>
+
+                      {backupSummary.fields.length > 0 && (
+                        <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
+                          <table className="w-full text-[11px]">
+                            <thead className="bg-slate-100 dark:bg-slate-800/70">
+                              <tr>
+                                <th className="p-2 text-left font-bold text-slate-600 dark:text-slate-300">Field</th>
+                                <th className="p-2 text-left font-bold text-slate-600 dark:text-slate-300">Extracted value</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {backupSummary.fields.map((field, fieldIndex) => (
+                                <tr key={`${field.label}-${fieldIndex}`} className="border-t border-slate-100 dark:border-slate-800">
+                                  <td className="p-2 font-semibold text-slate-500 dark:text-slate-400 align-top w-44">{field.label}</td>
+                                  <td className="p-2 text-slate-700 dark:text-slate-200 align-top">{field.value}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
                         </div>
-                      ) : null}
+                      )}
+
+                      {backupSummary.changes.length > 0 && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                          {backupSummary.changes.map((change, changeIndex) => (
+                            <div key={`${change.target}-${changeIndex}`} className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50/75 dark:bg-emerald-950/25 px-3 py-2">
+                              <p className="text-[11px] font-bold text-emerald-800 dark:text-emerald-200">{change.action} {"->"} {change.target}</p>
+                              {change.evidence && <p className="text-[10px] text-emerald-700 dark:text-emerald-300 line-clamp-2 mt-0.5">{change.evidence}</p>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {backupSummary.suggestions.length > 0 && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                          {backupSummary.suggestions.map((suggestion, suggestionIndex) => (
+                            <div key={`${suggestion.target}-${suggestionIndex}`} className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/75 dark:bg-amber-950/25 px-3 py-2">
+                              <p className="text-[11px] font-bold text-amber-800 dark:text-amber-200">{suggestion.target}</p>
+                              <p className="text-[10px] text-amber-700 dark:text-amber-300 line-clamp-2 mt-0.5">{suggestion.detail || suggestion.reason}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {backupSummary.fields.length === 0 && backupSummary.changes.length === 0 && backupSummary.suggestions.length === 0 && (
+                        <p className="text-center py-3 text-slate-400 text-[11.5px]">Backup exists, but no readable extracted field summary was found.</p>
+                      )}
                     </div>
-                    <div>
-                      <label className="block text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">AI Form Data (JSON)</label>
-                      <textarea value={entry.raw_extracted_data} onChange={(e) => handleTableChange("document_extraction_backups", idx, "raw_extracted_data", e.target.value)} rows={3} className="w-full p-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-[11.5px] font-mono" />
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
                 {(!formState.document_extraction_backups || formState.document_extraction_backups.length === 0) && (
                   <p className="text-center py-6 text-slate-400 text-[11.5px]">No AI fill backups yet. Run AI Fill to populate this section.</p>
                 )}

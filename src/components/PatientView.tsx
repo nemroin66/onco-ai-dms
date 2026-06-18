@@ -101,7 +101,18 @@ type SummaryItem = {
   value: string;
 };
 
-const SUMMARY_SKIP_KEYS = new Set(["id", "createdAt", "updatedAt", "isDeleted"]);
+type BackupSummary = {
+  documentName: string;
+  extractionDate: string;
+  extractionTime: string;
+  fileReference: string;
+  fields: Array<{ label: string; value: string }>;
+  changes: Array<{ target: string; action: string; evidence: string }>;
+  suggestions: Array<{ detail: string; target: string; reason: string }>;
+  reviewIssues: string[];
+};
+
+const SUMMARY_SKIP_KEYS = new Set(["id", "createdAt", "updatedAt", "isDeleted", "document_extraction_backups"]);
 const DEFAULT_ONLY_KEY_PATTERN = /(^id$|_id$|_unit$|_parameter$)/i;
 
 const humanizeKey = (key: string) => (
@@ -201,6 +212,57 @@ const buildPatientSummary = (record: PatientRecord): SummaryItem[] => {
   });
 
   return items;
+};
+
+const summariseBackupValue = (value: any): string => {
+  const formatted = formatSummaryValue(value);
+  return formatted.length > 180 ? `${formatted.slice(0, 177)}...` : formatted;
+};
+
+const buildBackupSummaries = (record: PatientRecord): BackupSummary[] => {
+  const backups = Array.isArray(record.document_extraction_backups) ? record.document_extraction_backups : [];
+  return backups.map((entry: any) => {
+    let parsed: any = null;
+    try {
+      parsed = entry.raw_extracted_data ? JSON.parse(entry.raw_extracted_data) : null;
+    } catch {
+      parsed = null;
+    }
+
+    const fields = parsed?.data && typeof parsed.data === "object"
+      ? Object.entries(parsed.data)
+          .filter(([, value]) => hasFilledValue(value))
+          .slice(0, 12)
+          .map(([key, value]) => ({ label: humanizeKey(key), value: summariseBackupValue(value) }))
+      : [];
+
+    const changes = Array.isArray(parsed?.proposedChanges)
+      ? parsed.proposedChanges.slice(0, 8).map((change: any) => ({
+          target: humanizeKey(String(change?.target || "Review")),
+          action: humanizeKey(String(change?.action || "Fill")),
+          evidence: String(change?.evidence?.quote || ""),
+        }))
+      : [];
+
+    const suggestions = Array.isArray(parsed?.suggestedElsewhere)
+      ? parsed.suggestedElsewhere.slice(0, 6).map((suggestion: any) => ({
+          detail: summariseBackupValue(suggestion?.detail ?? suggestion?.value ?? ""),
+          target: humanizeKey(String(suggestion?.candidateTarget || suggestion?.sourceKey || "Suggested Field")),
+          reason: String(suggestion?.reason || ""),
+        }))
+      : [];
+
+    return {
+      documentName: String(entry.document_name || "Untitled document"),
+      extractionDate: String(entry.extraction_date || ""),
+      extractionTime: String(entry.extraction_time || ""),
+      fileReference: String(entry.file_reference || ""),
+      fields,
+      changes,
+      suggestions,
+      reviewIssues: Array.isArray(parsed?.reviewIssues) ? parsed.reviewIssues.map(String).slice(0, 6) : [],
+    };
+  }).filter((entry) => hasFilledValue(entry.documentName) || entry.fields.length > 0 || entry.changes.length > 0 || entry.suggestions.length > 0);
 };
 
 interface PatientViewProps {
@@ -317,6 +379,7 @@ export default function PatientView({ patient, onEdit, onDelete, onClose }: Pati
 
   const p = patient;
   const summaryItems = React.useMemo(() => buildPatientSummary(p), [p]);
+  const backupSummaries = React.useMemo(() => buildBackupSummaries(p), [p]);
 
   const handleExportJSON = () => {
     const keyOrder = getExportKeyOrder();
@@ -454,8 +517,75 @@ export default function PatientView({ patient, onEdit, onDelete, onClose }: Pati
                   </li>
                 ))}
               </ul>
-            ) : (
+            ) : backupSummaries.length === 0 ? (
               <div className="md:col-span-4 text-center py-4 text-slate-400 italic">No filled data recorded.</div>
+            ) : null}
+            {backupSummaries.length > 0 && (
+              <details className="md:col-span-4 rounded-xl border border-purple-200 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-950/20 overflow-hidden">
+                <summary className="cursor-pointer select-none px-4 py-3 text-xs font-bold text-purple-800 dark:text-purple-200">
+                  Extracted Backup Summary ({backupSummaries.length})
+                </summary>
+                <div className="border-t border-purple-200/70 dark:border-purple-800/70 p-3 grid grid-cols-1 lg:grid-cols-2 gap-3">
+                  {backupSummaries.map((backup, index) => (
+                    <div key={`${backup.documentName}-${index}`} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white/85 dark:bg-slate-950/35 p-3 space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[11.5px] font-bold text-slate-800 dark:text-slate-100 truncate">{backup.documentName}</p>
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                            {[backup.extractionDate, backup.extractionTime].filter(Boolean).join(" ")}
+                          </p>
+                        </div>
+                        {backup.fileReference && (
+                          <a href={backup.fileReference} target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold text-blue-600 dark:text-blue-300 hover:underline whitespace-nowrap">
+                            View file
+                          </a>
+                        )}
+                      </div>
+
+                      {backup.fields.length > 0 && (
+                        <div className="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
+                          <table className="w-full text-[10px]">
+                            <tbody>
+                              {backup.fields.map((field, fieldIndex) => (
+                                <tr key={`${field.label}-${fieldIndex}`} className="border-b last:border-b-0 border-slate-100 dark:border-slate-800">
+                                  <td className="w-32 p-2 font-bold text-slate-500 dark:text-slate-400 align-top">{field.label}</td>
+                                  <td className="p-2 text-slate-700 dark:text-slate-200 align-top">{field.value}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+
+                      {backup.changes.length > 0 && (
+                        <div className="grid grid-cols-1 gap-1.5">
+                          {backup.changes.map((change, changeIndex) => (
+                            <div key={`${change.target}-${changeIndex}`} className="rounded-lg bg-emerald-50 dark:bg-emerald-950/25 border border-emerald-200 dark:border-emerald-800 px-2 py-1.5">
+                              <p className="text-[10px] font-bold text-emerald-800 dark:text-emerald-200">{change.action} {"->"} {change.target}</p>
+                              {change.evidence && <p className="text-[9px] text-emerald-700 dark:text-emerald-300 line-clamp-2">{change.evidence}</p>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {backup.suggestions.length > 0 && (
+                        <div className="grid grid-cols-1 gap-1.5">
+                          {backup.suggestions.map((suggestion, suggestionIndex) => (
+                            <div key={`${suggestion.target}-${suggestionIndex}`} className="rounded-lg bg-amber-50 dark:bg-amber-950/25 border border-amber-200 dark:border-amber-800 px-2 py-1.5">
+                              <p className="text-[10px] font-bold text-amber-800 dark:text-amber-200">{suggestion.target}</p>
+                              <p className="text-[9px] text-amber-700 dark:text-amber-300 line-clamp-2">{suggestion.detail || suggestion.reason}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {backup.fields.length === 0 && backup.changes.length === 0 && backup.suggestions.length === 0 && (
+                        <p className="text-[10px] text-slate-400 italic">Backup saved; no table-ready extracted fields were found in this backup.</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </details>
             )}
           </Section>
 
