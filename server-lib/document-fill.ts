@@ -1,6 +1,6 @@
 import MANIFEST, { type ManifestField } from "../src/formManifest.js";
 import { OncologyCategory } from "../src/types.js";
-import { runGemini } from "./gemini.js";
+import { GEMINI_EXTRACTION_FALLBACK_MODELS, runGemini } from "./gemini.js";
 
 export interface DocumentFillPayload {
   fileContent?: string;
@@ -37,7 +37,7 @@ const SUPPORTED_MIME_TYPES = new Set([
   "application/json",
 ]);
 const BLOCKED_FORM_KEYS = new Set(["id", "auto_id", "createdAt", "updatedAt", "createdBy", "isDeleted", "driveFolderId"]);
-const DOCUMENT_FILL_MODELS = ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.5-pro", "gemini-3.1-pro-preview"];
+const DOCUMENT_FILL_MODELS = GEMINI_EXTRACTION_FALLBACK_MODELS;
 
 export interface SourceEvidence {
   quote: string;
@@ -551,9 +551,9 @@ export async function runDocumentFill(payload: DocumentFillPayload) {
 
   const text = await runGemini([{ role: "user", parts }], systemInstruction, "application/json", {
     models: rotateModels(DOCUMENT_FILL_MODELS, Number(payload.modelStartIndex || 0)),
-    apiVersions: ["v1beta"],
-    enableDiscovery: false,
-    fallbackModels: [],
+    apiVersions: ["v1beta", "v1"],
+    enableDiscovery: true,
+    fallbackModels: DOCUMENT_FILL_MODELS,
     timeoutMs: 52_000,
     perAttemptTimeoutMs: 14_000,
   });

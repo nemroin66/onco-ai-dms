@@ -15,6 +15,7 @@
     "lint": "tsc --noEmit",
     "test:analytics": "node --import tsx scripts/test-analytics.ts",
     "test:document-fill": "node --import tsx scripts/test-document-fill.ts",
+    "test:gemini-fallback": "node --import tsx scripts/test-gemini-model-fallback.ts",
     "test:ai-fill-review": "node --import tsx scripts/test-ai-fill-review.ts"
   },
   "dependencies": {

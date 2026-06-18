@@ -417,9 +417,11 @@ async function discoverModelsViaRest(apiKey: string, apiVersion: string): Promis
     );
     const data: any = await response.json();
     if (data.models && Array.isArray(data.models)) {
-      return data.models
-        .filter((m: any) => m.supportedMethods?.includes("generateContent"))
-        .map((m: any) => m.name.replace(/^models\//, ""));
+      return orderGeminiExtractionModels(
+        data.models
+          .filter(modelSupportsGenerateContent)
+          .map((m: any) => m.name)
+      );
     }
   } catch (_) {
     // REST discovery failed
@@ -431,19 +433,20 @@ const FALLBACK_MODELS = [
   "gemini-3.5-flash",
   "gemini-3.1-flash-lite",
   "gemini-3.1-flash-lite-preview",
-  "gemini-3.1-flash-image-preview",
   "gemini-3.1-pro-preview",
   "gemini-3-flash-preview",
   "gemini-3-pro-preview",
+  "gemini-2.5-flash",
+  "gemini-2.5-flash-preview-09-2025",
   "gemini-2.5-flash-lite",
   "gemini-2.5-flash-lite-preview-09-2025",
-  "gemini-2.5-flash",
-  "gemini-2.5-flash-image",
-  "gemini-2.5-flash-preview-09-2025",
   "gemini-2.5-pro",
-  "gemini-2.0-flash-lite",
-  "gemini-2.0-flash-lite-preview-02-05",
+  "gemini-2.5-pro-preview-06-05",
   "gemini-2.0-flash",
+  "gemini-2.0-flash-001",
+  "gemini-2.0-flash-lite",
+  "gemini-2.0-flash-lite-001",
+  "gemini-2.0-flash-lite-preview-02-05",
   "gemini-2.0-flash-exp",
   "gemini-2.0-pro-exp",
   "gemini-1.5-flash",
@@ -451,16 +454,44 @@ const FALLBACK_MODELS = [
   "gemini-1.5-flash-exp",
   "gemini-1.5-pro",
   "gemini-1.5-pro-exp",
-  "gemini-pro",
-  "gemini-1.0-pro",
 ];
+
+const NON_EXTRACTION_MODEL_PATTERN = /(embedding|embed|tts|live|image|imagen|veo|lyria|aqa|gemma|learnlm|banana|chirp|music|vision)/i;
+
+function isUsableExtractionModelName(model: string) {
+  const name = String(model || "").replace(/^models\//, "").toLowerCase();
+  return name.startsWith("gemini-") && !NON_EXTRACTION_MODEL_PATTERN.test(name) && /(flash|pro)/.test(name);
+}
+
+function modelSupportsGenerateContent(model: any) {
+  const methods = [
+    ...(Array.isArray(model?.supportedMethods) ? model.supportedMethods : []),
+    ...(Array.isArray(model?.supportedGenerationMethods) ? model.supportedGenerationMethods : []),
+  ].map((method) => String(method));
+  return methods.some((method) => method === "generateContent" || method === "generate_content");
+}
+
+function orderGeminiExtractionModels(models: string[]) {
+  const seen = new Set<string>();
+  const rank = new Map(FALLBACK_MODELS.map((model, index) => [model, index]));
+  return models
+    .map((model) => String(model || "").replace(/^models\//, ""))
+    .filter((model) => {
+      if (!isUsableExtractionModelName(model) || seen.has(model)) return false;
+      seen.add(model);
+      return true;
+    })
+    .sort((a, b) => {
+      const rankA = rank.get(a) ?? 999;
+      const rankB = rank.get(b) ?? 999;
+      return rankA - rankB || a.localeCompare(b);
+    });
+}
 
 function buildConfig(apiVersion: string, systemInstruction?: string, responseMimeType?: string) {
   const config: Record<string, any> = {};
-  if (apiVersion === "v1beta") {
-    if (systemInstruction) config.systemInstruction = systemInstruction;
-    if (responseMimeType) config.responseMimeType = responseMimeType;
-  }
+  if (systemInstruction) config.systemInstruction = systemInstruction;
+  if (responseMimeType) config.responseMimeType = responseMimeType;
   return config;
 }
 
