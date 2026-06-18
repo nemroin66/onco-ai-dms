@@ -97,7 +97,7 @@ interface AddPatientViewProps {
 
 const AI_DOCUMENT_ACCEPT = ".pdf,.csv,.json,.txt,.jpg,.jpeg,.png,.tif,.tiff,.bmp,.webp,image/jpeg,image/png,image/tiff,image/bmp,image/webp,text/plain,text/csv,application/json";
 const DRIVE_DOCUMENT_ACCEPT = ".pdf,.jpg,.jpeg,.png,.tif,.tiff,.bmp,.webp,image/jpeg,image/png,image/tiff,image/bmp,image/webp,application/pdf";
-const AI_EXTRACTION_MODELS = ["gemini-2.5-flash-lite", "gemini-2.0-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash"];
+const AI_EXTRACTION_MODELS = ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash-lite", "gemini-2.0-flash"];
 const AI_EXTRACTION_REQUEST_TIMEOUT_MS = 75_000;
 
 type SubTableProps = {
@@ -2074,10 +2074,12 @@ export default function AddPatientView({
   const waitForAiRetry = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
   const isRetryableAiExtractionError = (error: any) => {
+    const message = String(error?.message || error || "");
+    const isUnavailableModel = /not found for API version|not supported for generateContent|MODEL_UNAVAILABLE/i.test(message);
     if (error instanceof ApiError) {
-      return error.status === 0 || error.status === 504 || error.status >= 500 || error.body?.retryable === true;
+      return isUnavailableModel || error.status === 0 || error.status === 404 || error.status === 504 || error.status >= 500 || error.body?.retryable === true;
     }
-    return /timeout|timed out|network|failed to fetch/i.test(String(error?.message || error || ""));
+    return isUnavailableModel || /timeout|timed out|network|failed to fetch/i.test(message);
   };
 
   const runAiDocumentFillUntilComplete = async (
@@ -2128,7 +2130,7 @@ export default function AddPatientView({
         const waitMs = Math.min(30_000, 5_000 + attempt * 2_500);
         console.warn("AI document understanding timed out; retrying with fallback model.", error);
         setExtractProgress(Math.min(78, 34 + attempt * 4));
-        setExtractStage(`AI model timed out. Waiting ${Math.ceil(waitMs / 1000)}s, then continuing with the next fallback model.`);
+        setExtractStage(`AI model did not return usable output. Waiting ${Math.ceil(waitMs / 1000)}s, then continuing with the next fallback model.`);
         await waitForAiRetry(waitMs);
         attempt += 1;
       }

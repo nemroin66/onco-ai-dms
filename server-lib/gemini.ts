@@ -27,31 +27,10 @@ async function discoverModelsViaRest(apiKey: string, apiVersion: string): Promis
 }
 
 const FALLBACK_MODELS = [
-  "gemini-3.5-flash",
-  "gemini-3.1-flash-lite",
-  "gemini-3.1-flash-lite-preview",
-  "gemini-3.1-flash-image-preview",
-  "gemini-3.1-pro-preview",
-  "gemini-3-flash-preview",
-  "gemini-3-pro-preview",
   "gemini-2.5-flash-lite",
-  "gemini-2.5-flash-lite-preview-09-2025",
   "gemini-2.5-flash",
-  "gemini-2.5-flash-image",
-  "gemini-2.5-flash-preview-09-2025",
-  "gemini-2.5-pro",
   "gemini-2.0-flash-lite",
-  "gemini-2.0-flash-lite-preview-02-05",
   "gemini-2.0-flash",
-  "gemini-2.0-flash-exp",
-  "gemini-2.0-pro-exp",
-  "gemini-1.5-flash",
-  "gemini-1.5-flash-8b",
-  "gemini-1.5-flash-exp",
-  "gemini-1.5-pro",
-  "gemini-1.5-pro-exp",
-  "gemini-pro",
-  "gemini-1.0-pro",
 ];
 
 interface RunGeminiOptions {
@@ -98,6 +77,34 @@ function assertWithinDeadline(deadline: number) {
     (error as Error & { status?: number; code?: string }).code = "DEADLINE_TIMEOUT";
     throw error;
   }
+}
+
+function normalizeGeminiError(error: any) {
+  const raw = String(error?.message || error || "");
+  let parsed: any = null;
+  try {
+    parsed = raw.trim().startsWith("{") ? JSON.parse(raw) : null;
+  } catch {
+    parsed = null;
+  }
+  const providerError = parsed?.error || {};
+  const status = Number(error?.status || error?.code || providerError.code || 0);
+  const message = String(providerError.message || raw);
+  const providerStatus = String(providerError.status || "");
+  const normalized = error as Error & { status?: number; code?: string; providerStatus?: string };
+
+  if (
+    status === 404
+    || providerStatus === "NOT_FOUND"
+    || /not found for API version|not supported for generateContent/i.test(message)
+  ) {
+    normalized.status = 502;
+    normalized.code = "MODEL_UNAVAILABLE";
+    normalized.providerStatus = providerStatus || "NOT_FOUND";
+    normalized.message = message;
+  }
+
+  return normalized;
 }
 
 export async function runGemini(
@@ -153,7 +160,7 @@ export async function runGemini(
         const response = await generate(attempt.key, apiVersion, attempt.model);
         return response.text || "";
       } catch (error: any) {
-        lastError = error;
+        lastError = normalizeGeminiError(error);
         if (error?.code === "DEADLINE_TIMEOUT") throw error;
       }
     }
@@ -174,7 +181,7 @@ export async function runGemini(
             const response = await generate(attempt.key, apiVersion, model);
             return response.text || "";
           } catch (error: any) {
-            lastError = error;
+            lastError = normalizeGeminiError(error);
             if (error?.code === "DEADLINE_TIMEOUT") throw error;
           }
         }
@@ -191,7 +198,7 @@ export async function runGemini(
           const response = await generate(attempt.key, apiVersion, model);
           return response.text || "";
         } catch (error: any) {
-          lastError = error;
+          lastError = normalizeGeminiError(error);
           if (error?.code === "DEADLINE_TIMEOUT") throw error;
         }
       }

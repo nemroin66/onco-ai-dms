@@ -37,7 +37,7 @@ const SUPPORTED_MIME_TYPES = new Set([
   "application/json",
 ]);
 const BLOCKED_FORM_KEYS = new Set(["id", "auto_id", "createdAt", "updatedAt", "createdBy", "isDeleted", "driveFolderId"]);
-const DOCUMENT_FILL_MODELS = ["gemini-2.5-flash-lite", "gemini-2.0-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash"];
+const DOCUMENT_FILL_MODELS = ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash-lite", "gemini-2.0-flash"];
 
 export interface SourceEvidence {
   quote: string;
