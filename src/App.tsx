@@ -454,7 +454,8 @@ function AppContent() {
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         activeMenu={activeMenu}
         onChangeMenu={(menu) => {
-          // If navigating away from Add Patient, discard any edits safely
+          // Close patient viewer and discard edits when navigating away
+          setSelectedPatient(null);
           if (menu !== "Add Patient") {
             setPatientUnderEdit(null);
           }
