@@ -92,7 +92,6 @@ export default function HomeView({
           </svg>
         </div>
         <div className="max-w-3xl w-full text-left">
-          <h1 className="font-bold text-lg tracking-tight leading-none mb-3" style={{ color: "#4F46E5" }}>AI DMS</h1>
           <span className="eyebrow px-3 py-1 rounded-full bounce-in inline-block text-xs font-semibold text-white" style={{ backgroundColor: "#10B981" }}>
             Clinical Portal Active
           </span>
