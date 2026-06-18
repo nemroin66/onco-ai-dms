@@ -377,7 +377,14 @@ function AppContent() {
   };
 
   if (!authReady) {
-    return <LoginScreen onLoginSuccess={handleLoginSuccess} />;
+    return (
+      <div className="min-h-screen bg-natural-bg flex items-center justify-center px-4 text-slate-700 dark:bg-slate-950 dark:text-slate-200">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-10 w-10 rounded-full border-3 border-natural-accent/25 border-t-natural-accent animate-spin" aria-hidden="true" />
+          <p className="text-sm font-bold">Loading session...</p>
+        </div>
+      </div>
+    );
   }
 
   if (!currentUser) {
