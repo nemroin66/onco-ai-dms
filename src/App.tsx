@@ -390,7 +390,7 @@ function AppContent() {
   };
 
   if (!authReady) {
-    return <div className="min-h-screen bg-natural-bg flex items-center justify-center text-sm font-semibold text-slate-500">Restoring secure session...</div>;
+    return <LoginScreen onLoginSuccess={handleLoginSuccess} />;
   }
 
   if (!currentUser) {

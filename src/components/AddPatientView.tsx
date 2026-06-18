@@ -3093,15 +3093,6 @@ export default function AddPatientView({
 
       {/* AI document understanding point (locked unless consent checkbox is ticked) */}
       <div className={`relative ${!consentTaken ? "opacity-45 cursor-not-allowed select-none" : ""}`}>
-        {!consentTaken && (
-          <div className="absolute inset-0 z-10 bg-slate-100/10 dark:bg-slate-900/10 rounded-2xl flex items-center justify-center">
-            <div className="bg-slate-900/90 text-theme-on-accent py-2 px-4 rounded-xl flex items-center gap-2 text-xs font-bold">
-              <AlertTriangle className="h-4 w-4 text-natural-brown" />
-              <span>Confirm Informed Consent above to unlock Document Uploads & AI Fill</span>
-            </div>
-          </div>
-        )}
-
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
           {/* AI Drag Drop upload box */}
