@@ -18,6 +18,8 @@ import {
   Clock,
   Users,
   RefreshCw,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { PatientRecord, UserAccount } from "../types";
 
@@ -52,6 +54,7 @@ export default function HomeView({
 }: HomeViewProps) {
 
   const [now, setNow] = useState(new Date());
+  const [recentSectionOpen, setRecentSectionOpen] = useState(false);
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
@@ -208,6 +211,15 @@ export default function HomeView({
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <button
+              type="button"
+              onClick={() => setRecentSectionOpen((open) => !open)}
+              className="inline-flex items-center gap-2 border border-natural-border bg-theme-surface hover:border-natural-accent dark:bg-slate-900 text-slate-700 dark:text-slate-250 px-3 py-2 rounded-xl text-xs font-semibold transition"
+              aria-expanded={recentSectionOpen}
+            >
+              {recentSectionOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+              <span>{recentSectionOpen ? "Hide" : "Show"}</span>
+            </button>
+            <button
               id="btn-load-recent-patients"
               type="button"
               onClick={onLoadRecentRecords}
@@ -228,7 +240,7 @@ export default function HomeView({
           </div>
         </div>
 
-        {recentRecordsLoading ? (
+        {recentSectionOpen && (recentRecordsLoading ? (
           <div className="py-12 p-5 text-center">
             <div className="h-8 w-8 mx-auto rounded-full border-2 border-natural-accent border-t-transparent animate-spin"></div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-3 font-semibold">Loading recent records...</p>
@@ -331,7 +343,7 @@ export default function HomeView({
               </tbody>
             </table>
           </div>
-        )}
+        ))}
       </div>
 
     </div>
