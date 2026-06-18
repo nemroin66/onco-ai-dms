@@ -70,10 +70,10 @@ const toastIcon: Record<DialogVariant, React.ReactNode> = {
 };
 
 const toastBg: Record<DialogVariant, string> = {
-  info: "bg-natural-accent/10 border-natural-accent/25 text-natural-accent",
-  success: "bg-emerald-500/10 border-emerald-500/25 text-emerald-700 dark:text-emerald-300",
-  warning: "bg-amber-500/10 border-amber-500/25 text-amber-700 dark:text-amber-300",
-  danger: "bg-rose-500/10 border-rose-500/25 text-rose-700 dark:text-rose-300",
+  info: "bg-white dark:bg-slate-800 border-natural-accent/40 text-natural-accent shadow-md",
+  success: "bg-white dark:bg-slate-800 border-emerald-400/60 text-emerald-700 dark:text-emerald-300 shadow-md",
+  warning: "bg-white dark:bg-slate-800 border-amber-400/60 text-amber-700 dark:text-amber-300 shadow-md",
+  danger: "bg-white dark:bg-slate-800 border-rose-400/60 text-rose-700 dark:text-rose-300 shadow-md",
 };
 
 const confirmIcon: Record<DialogVariant, React.ReactNode> = {
