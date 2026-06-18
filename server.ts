@@ -716,11 +716,29 @@ app.get("/api/patients/count", countPatients as any);
 app.get("/api/patients", async (req, res) => {
   try {
     const includeDeleted = String(req.query.includeDeleted || "").toLowerCase() === "true" || String(req.query.includeDeleted || "").trim() === "1";
+    const searchQuery = String(req.query.search || "").trim().toLowerCase();
+    const isSearch = !!searchQuery;
+    const limit = Math.min(Math.max(Number(req.query.limit) || 500, 1), 5000);
     const patients = await listCollection("patients");
     const user = expressUser(req);
-    const filteredPatients = (includeDeleted ? patients : patients.filter((p: any) => !p.isDeleted))
+
+    let filteredPatients = (includeDeleted ? patients : patients.filter((p: any) => !p.isDeleted))
       .filter((p: any) => !p.createdBy || p.createdBy === user.uid || user.role === "admin");
-    filteredPatients.sort((a: any, b: any) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
+
+    if (isSearch) {
+      const terms = searchQuery.split(/\s+/).filter(Boolean);
+      filteredPatients = filteredPatients.filter((p: any) => {
+        const fieldsToSearch = [
+          `${p.title || ""} ${p.first_name || ""} ${p.last_name || ""}`,
+          p.auto_id, p.nic, p.tp, p.bht, p.clinic, p.hospital, p.ward_no, p.initials,
+        ].map((v: any) => String(v || "").toLowerCase());
+        return terms.every((term: string) => fieldsToSearch.some((f: string) => f.includes(term)));
+      });
+    } else {
+      filteredPatients.sort((a: any, b: any) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
+      filteredPatients = filteredPatients.slice(0, limit);
+    }
+
     res.json(filteredPatients);
   } catch (error: any) {
     apiError(res, error);
