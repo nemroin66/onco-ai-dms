@@ -23,8 +23,7 @@ let versionPromise: Promise<number> | null = null;
 async function loadPatientSnapshot(userId?: string) {
   if (patientSnapshotCache && patientSnapshotCache.expires > Date.now()) return patientSnapshotCache.patients;
   if (!patientSnapshotPromise) {
-    const where = [{ field: "isDeleted", op: "==" as const, value: false }];
-    patientSnapshotPromise = listCollection("patients", { where })
+    patientSnapshotPromise = listCollection("patients")
       .then((patients) => {
         patientSnapshotCache = { expires: Date.now() + 300_000, patients };
         return patients;
@@ -33,7 +32,7 @@ async function loadPatientSnapshot(userId?: string) {
         patientSnapshotPromise = null;
       });
   }
-  const allPatients = await patientSnapshotPromise;
+  const allPatients = (await patientSnapshotPromise).filter((p: any) => p.isDeleted !== true);
   if (!userId) return allPatients;
   return allPatients.filter((p: any) => !p.createdBy || p.createdBy === userId);
 }

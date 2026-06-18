@@ -14,9 +14,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       const user = vercelUser(req);
       const files = await listCollection("files");
-      const patientWhere: { field: string; op: any; value: any }[] = [{ field: "isDeleted", op: "==", value: false }];
+      const patientWhere: { field: string; op: any; value: any }[] = [];
       if (user.role !== "admin") patientWhere.push({ field: "createdBy", op: "==", value: user.uid });
-      const allPatients = await listCollection("patients", { where: patientWhere });
+      const allPatients = (await listCollection("patients", { where: patientWhere })).filter((p: any) => p.isDeleted !== true);
       const visiblePatientIds = new Set(allPatients.map((p: any) => p.id));
       return res.json(files.filter((f: any) => visiblePatientIds.has(f.patientId)));
     } catch (error: any) {

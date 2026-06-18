@@ -5,11 +5,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
   try {
     const col = db().collection("patients");
-    const [activeSnap, deletedSnap] = await Promise.all([
-      col.where("isDeleted", "==", false).count().get(),
+    const [totalSnap, deletedSnap] = await Promise.all([
+      col.count().get(),
       col.where("isDeleted", "==", true).count().get(),
     ]);
-    return res.json({ active: activeSnap.data().count, deleted: deletedSnap.data().count, total: activeSnap.data().count + deletedSnap.data().count });
+    const total = totalSnap.data().count;
+    const deleted = deletedSnap.data().count;
+    return res.json({ active: total - deleted, deleted, total });
   } catch (error: any) {
     console.error("[count] Error:", error?.message || error);
     return res.status(500).json({ error: "Count request failed." });

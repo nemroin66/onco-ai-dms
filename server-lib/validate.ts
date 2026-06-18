@@ -28,7 +28,7 @@ export const patientSchema = z.object({
   oncology_types: z.array(z.string()).optional().default([]),
   oncology_other: z.string().max(500).optional().default(""),
   consent_ai_processing: z.boolean().optional(),
-  isDeleted: z.boolean().optional(),
+  isDeleted: z.boolean().optional().default(false),
   driveFolderId: z.string().optional(),
   auto_id: z.string().optional(),
   createdAt: z.string().optional(),

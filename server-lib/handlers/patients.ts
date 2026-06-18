@@ -23,12 +23,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const limit = Math.min(Math.max(Number(req.query.limit) || 500, 1), 5000);
 
       const where: { field: string; op: any; value: any }[] = [];
-      if (!includeDeleted) where.push({ field: "isDeleted", op: "==", value: false });
       if (user.role !== "admin") where.push({ field: "createdBy", op: "==", value: user.uid });
       if (oncologyFilter) where.push({ field: "oncology", op: "==", value: oncologyFilter });
       if (bhtFilter) where.push({ field: "bht", op: "==", value: bhtFilter });
 
       let patients = await listCollection("patients", { where });
+
+      // Filter isDeleted in-memory to support docs missing the field
+      if (!includeDeleted) {
+        patients = patients.filter((p: any) => p.isDeleted !== true);
+      }
 
       if (isSearch) {
         const terms = searchQuery.split(/\s+/).filter(Boolean);
@@ -77,6 +81,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         id,
         createdBy: user.uid,
         auto_id,
+        isDeleted: false,
         createdAt: parsed.createdAt || now,
         updatedAt: now,
       };
