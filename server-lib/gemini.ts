@@ -27,10 +27,9 @@ async function discoverModelsViaRest(apiKey: string, apiVersion: string): Promis
 }
 
 const FALLBACK_MODELS = [
+  "gemini-3.1-flash-lite",
   "gemini-2.5-flash-lite",
   "gemini-2.5-flash",
-  "gemini-2.0-flash-lite",
-  "gemini-2.0-flash",
 ];
 
 interface RunGeminiOptions {
@@ -88,7 +87,7 @@ function normalizeGeminiError(error: any) {
     parsed = null;
   }
   const providerError = parsed?.error || {};
-  const status = Number(error?.status || error?.code || providerError.code || 0);
+  const status = typeof error?.status === "number" ? error.status : Number(providerError.code || 0);
   const message = String(providerError.message || raw);
   const providerStatus = String(providerError.status || "");
   const retryDelay = providerError.details
@@ -116,13 +115,13 @@ function normalizeGeminiError(error: any) {
   }
 
   if (status === 429 || providerStatus === "RESOURCE_EXHAUSTED") {
-    normalized.status = 429;
-    normalized.code = hasZeroLimit ? "FREE_QUOTA_EXHAUSTED" : "RATE_LIMITED";
+    normalized.status = hasZeroLimit ? 502 : 429;
+    normalized.code = hasZeroLimit ? "MODEL_FREE_TIER_UNAVAILABLE" : "RATE_LIMITED";
     normalized.providerStatus = providerStatus || "RESOURCE_EXHAUSTED";
     normalized.retryAfterMs = retryAfterMs;
-    normalized.retryable = !hasZeroLimit && retryAfterMs > 0;
+    normalized.retryable = hasZeroLimit || retryAfterMs > 0;
     normalized.message = hasZeroLimit
-      ? "Gemini free-tier quota is exhausted or unavailable for the current project/model. AI extraction cannot continue until quota resets, a different API project/key with free quota is used, or billing is enabled."
+      ? "This Gemini model has no usable free-tier quota for the current API project. Trying another extraction model."
       : `Gemini rate limit reached. Retry after ${Math.max(1, Math.ceil(retryAfterMs / 1000))} seconds.`;
   }
 

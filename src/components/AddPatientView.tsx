@@ -97,7 +97,7 @@ interface AddPatientViewProps {
 
 const AI_DOCUMENT_ACCEPT = ".pdf,.csv,.json,.txt,.jpg,.jpeg,.png,.tif,.tiff,.bmp,.webp,image/jpeg,image/png,image/tiff,image/bmp,image/webp,text/plain,text/csv,application/json";
 const DRIVE_DOCUMENT_ACCEPT = ".pdf,.jpg,.jpeg,.png,.tif,.tiff,.bmp,.webp,image/jpeg,image/png,image/tiff,image/bmp,image/webp,application/pdf";
-const AI_EXTRACTION_MODELS = ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash-lite", "gemini-2.0-flash"];
+const AI_EXTRACTION_MODELS = ["gemini-3.1-flash-lite", "gemini-2.5-flash-lite", "gemini-2.5-flash"];
 const AI_EXTRACTION_REQUEST_TIMEOUT_MS = 75_000;
 
 type SubTableProps = {
