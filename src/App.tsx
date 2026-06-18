@@ -7,7 +7,7 @@ import React, { useState, useEffect } from "react";
 import { apiFetch } from "./lib/api-client";
 import LoginScreen from "./components/LoginScreen";
 import Sidebar, { MenuType } from "./components/Sidebar";
-import { getFirebaseUserProfile, initAuth, logout } from "./lib/auth";
+import { initAuth, logout } from "./lib/auth";
 import HomeView from "./components/HomeView";
 import AddPatientView from "./components/AddPatientView";
 import SearchRecordsView from "./components/SearchRecordsView";
@@ -36,7 +36,8 @@ function AppContent() {
   useEffect(() => {
     const unsub = initAuth(async (firebaseUser) => {
       try {
-        const profile = await getFirebaseUserProfile(firebaseUser.uid);
+        const profileRes = await apiFetch("/api/users");
+        const profile = profileRes.ok ? await profileRes.json() : {};
         setCurrentUser({
           uid: firebaseUser.uid,
           name: profile?.name || firebaseUser.displayName || firebaseUser.email || "User",

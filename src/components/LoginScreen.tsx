@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from "react";
 import { ShieldCheck, Activity, X, ArrowLeft } from "lucide-react";
 import { UserAccount } from "../types";
-import { emailPasswordSignIn, googleSignIn, getFirebaseUserProfile } from "../lib/auth";
+import { emailPasswordSignIn, googleSignIn } from "../lib/auth";
 import AnimatedButton from "./AnimatedButton";
 
 interface LoginScreenProps {
@@ -40,18 +40,16 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
     try {
       const result = await googleSignIn();
       if (result) {
-        const profile = await getFirebaseUserProfile(result.user.uid);
         const email = result.user.email || "";
-        const namePart = profile?.name || result.user.displayName || email.split("@")[0] || "User";
+        const namePart = result.user.displayName || email.split("@")[0] || "User";
         const name = namePart.split(/[._-]/).map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(" ");
-        const role = profile?.role === "admin" ? "admin" : "user";
 
         onLoginSuccess({
           uid: result.user.uid,
           name,
           email,
-          role,
-          avatarColor: role === "admin" ? "bg-natural-accent" : "bg-natural-brown"
+          role: "user",
+          avatarColor: "bg-natural-brown"
         });
       }
     } catch (err: any) {
@@ -92,20 +90,18 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
 
     try {
       const firebaseUser = await emailPasswordSignIn(normalizedEmail, password);
-      const profile = await getFirebaseUserProfile(firebaseUser.uid);
-      const namePart = profile?.name || firebaseUser.displayName || normalizedEmail.split("@")[0];
+      const namePart = firebaseUser.displayName || normalizedEmail.split("@")[0];
       const formatName = namePart
         .split(/[._-]/)
         .map(p => p.charAt(0).toUpperCase() + p.slice(1))
         .join(" ");
-      const role = profile?.role === "admin" ? "admin" : "user";
 
       onLoginSuccess({
         uid: firebaseUser.uid,
         name: formatName,
         email: normalizedEmail,
-        role,
-        avatarColor: role === "admin" ? "bg-natural-accent" : "bg-natural-brown"
+        role: "user",
+        avatarColor: "bg-natural-brown"
       });
       setLoginSuccess(true);
     } catch (err: any) {
