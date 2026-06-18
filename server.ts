@@ -30,6 +30,8 @@ const PORT = Number(process.env.PORT || 3000);
 app.use(express.json({ limit: "15mb" }));
 app.use(express.urlencoded({ limit: "15mb", extended: true }));
 
+import countPatients from "./server-lib/handlers/patients/count.js";
+
 // Security middleware
 const CLIENT_ORIGINS = [
   "http://localhost:3000",
@@ -694,6 +696,8 @@ app.post(["/api/extract", "/api/document-fill"], async (req, res) => {
   }
 });
 
+app.get("/api/patients/count", countPatients as any);
+
 app.get("/api/patients", async (req, res) => {
   try {
     const includeDeleted = String(req.query.includeDeleted || "").toLowerCase() === "true" || String(req.query.includeDeleted || "").trim() === "1";
@@ -1226,6 +1230,7 @@ export async function startServer() {
   } else if (!process.env.VERCEL) {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
+    app.get("/favicon.ico", (_req, res) => res.redirect("/favicon.svg"));
     app.get("*", (_req, res) => res.sendFile(path.join(distPath, "index.html")));
   }
 

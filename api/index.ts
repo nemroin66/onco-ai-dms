@@ -39,6 +39,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
+  if (route === "favicon.ico") return res.status(204).end();
+
   if (parts[0] === "analytics") {
     req.query.analyticsPath = parts.slice(1).join("/");
     return analytics(req, res);

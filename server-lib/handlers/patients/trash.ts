@@ -11,7 +11,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const user = vercelUser(req);
       const where: { field: string; op: any; value: any }[] = [{ field: "isDeleted", op: "==", value: true }];
       if (user.role !== "admin") where.push({ field: "createdBy", op: "==", value: user.uid });
-      const patients = await listCollection("patients", { where, orderBy: "updatedAt desc" });
+      let patients = await listCollection("patients", { where });
+      patients.sort((a: any, b: any) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
       return res.json(patients);
     } catch (error: any) {
       console.error("[handler] Error:", error?.message || error);

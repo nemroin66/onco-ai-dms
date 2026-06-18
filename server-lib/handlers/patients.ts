@@ -28,7 +28,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (oncologyFilter) where.push({ field: "oncology", op: "==", value: oncologyFilter });
       if (bhtFilter) where.push({ field: "bht", op: "==", value: bhtFilter });
 
-      let patients = await listCollection("patients", { where, orderBy: "updatedAt desc", limit });
+      let patients = await listCollection("patients", { where });
+      patients.sort((a: any, b: any) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
+      patients = patients.slice(0, limit);
 
       if (isSearch) {
         const terms = searchQuery.split(/\s+/).filter(Boolean);
