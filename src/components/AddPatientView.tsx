@@ -98,7 +98,40 @@ interface AddPatientViewProps {
 const AI_DOCUMENT_ACCEPT = ".pdf,.csv,.json,.txt,.jpg,.jpeg,.png,.tif,.tiff,.bmp,.webp,image/jpeg,image/png,image/tiff,image/bmp,image/webp,text/plain,text/csv,application/json";
 const DRIVE_DOCUMENT_ACCEPT = ".pdf,.jpg,.jpeg,.png,.tif,.tiff,.bmp,.webp,image/jpeg,image/png,image/tiff,image/bmp,image/webp,application/pdf";
 const AI_EXTRACTION_MODELS = ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.5-pro", "gemini-3.1-pro-preview"];
-const AI_EXTRACTION_REQUEST_TIMEOUT_MS = 75_000;
+
+type AiBatchQueueStatus = "pending" | "extracting" | "retry-waiting" | "merged" | "drive-uploaded" | "failed" | "paused";
+
+type AiBatchQueueItem = {
+  id: string;
+  name: string;
+  size: number;
+  status: AiBatchQueueStatus;
+  progress: number;
+  stage: string;
+  attempts: number;
+  model?: string;
+  error?: string;
+};
+
+type ProcessAttachmentOptions = {
+  queueItemId?: string;
+  batchIndex?: number;
+  batchTotal?: number;
+  preserveIndicators?: boolean;
+};
+
+type ProcessAttachmentResult = {
+  ok: boolean;
+  paused?: boolean;
+  driveUploaded?: boolean;
+  message?: string;
+};
+
+const formatFileSize = (size: number) => {
+  if (!Number.isFinite(size) || size <= 0) return "0 KB";
+  if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+};
 
 type SubTableProps = {
   title: string;
@@ -627,6 +660,9 @@ export default function AddPatientView({
   const [extractStage, setExtractStage] = useState("");
   const [lastExtractionSummary, setLastExtractionSummary] = useState("");
   const [lastAgentReport, setLastAgentReport] = useState<any>(null);
+  const [aiBatchQueue, setAiBatchQueue] = useState<AiBatchQueueItem[]>([]);
+  const [aiBatchProgress, setAiBatchProgress] = useState({ current: 0, total: 0 });
+  const [isAiBatchPaused, setIsAiBatchPaused] = useState(false);
   const [isVaultUploading, setIsVaultUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -813,13 +849,27 @@ export default function AddPatientView({
     source_file_summaries: [],
     extraction_safety_note: ""
   });
+  const formStateLatestRef = React.useRef<Partial<PatientRecord>>(formState);
   // Wrap setFormState to mark form dirty on any change
   const setFormStateRef = React.useRef(_setFormState);
   setFormStateRef.current = _setFormState;
   const setFormState: typeof _setFormState = React.useCallback((updater: any) => {
     markDirty();
-    setFormStateRef.current(updater);
+    if (typeof updater === "function") {
+      setFormStateRef.current((prev: Partial<PatientRecord>) => {
+        const next = updater(prev);
+        formStateLatestRef.current = next;
+        return next;
+      });
+    } else {
+      formStateLatestRef.current = updater;
+      setFormStateRef.current(updater);
+    }
   }, [markDirty]);
+
+  useEffect(() => {
+    formStateLatestRef.current = formState;
+  }, [formState]);
 
   const selectedOncologyTypes = Array.from(
     new Set([...(formState.oncology_types || []), formState.oncology].filter(Boolean) as string[])
@@ -2026,11 +2076,11 @@ export default function AddPatientView({
   };
 
   const ensurePatientSavedBeforeUpload = async () => {
-    if (formState.id) return formState.id;
+    if (formStateLatestRef.current.id) return formStateLatestRef.current.id;
     setExtractProgress(12);
     setExtractStage("Saving patient record before upload");
     try {
-      const cleanRecord = stripBlankTableRows(formState);
+      const cleanRecord = stripBlankTableRows(formStateLatestRef.current);
       const saved = await onSavePatient(cleanRecord as PatientRecord);
       setFormState(prev => ({ ...prev, id: saved.id }));
       return saved.id;
@@ -2038,6 +2088,106 @@ export default function AddPatientView({
       const msg = error?.message || "Unknown error";
       await notify(`Could not auto-save patient: ${msg}`, "Upload Blocked", "warning");
       return "";
+    }
+  };
+
+  const createAiBatchItems = (files: File[]): AiBatchQueueItem[] => (
+    files.map((file, index) => ({
+      id: `${Date.now()}-${index}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`,
+      name: file.name,
+      size: file.size,
+      status: "pending",
+      progress: 0,
+      stage: "Waiting for AI extraction",
+      attempts: 0,
+    }))
+  );
+
+  const updateAiBatchItem = (id: string | undefined, patch: Partial<AiBatchQueueItem>) => {
+    if (!id) return;
+    setAiBatchQueue(current => current.map(item => item.id === id ? { ...item, ...patch } : item));
+  };
+
+  const pausePendingAiBatchItems = (message: string) => {
+    setAiBatchQueue(current => current.map(item => (
+      item.status === "pending"
+        ? { ...item, status: "paused", stage: "Paused before extraction", error: message }
+        : item
+    )));
+  };
+
+  const isQuotaPauseAiExtractionError = (error: any) => {
+    const code = error instanceof ApiError ? String(error.body?.code || "") : "";
+    const message = String(error?.message || error?.body?.error || error || "");
+    return /FREE_QUOTA_EXHAUSTED|MODEL_FREE_TIER_UNAVAILABLE/i.test(code)
+      || /limit:\s*0|no usable free-tier quota|free quota exhausted/i.test(message);
+  };
+
+  const resetUploadIndicatorsSoon = () => {
+    setTimeout(() => {
+      setIsExtracting(false);
+      setExtractProgress(0);
+      setExtractStage("");
+      setIsVaultUploading(false);
+      setVaultProgress(0);
+      setVaultStage("");
+      setActiveUploadSection(null);
+    }, 1800);
+  };
+
+  const processAiExtractionBatch = async (files: FileList | File[]) => {
+    const selectedFiles = Array.from(files).filter(Boolean);
+    if (selectedFiles.length === 0) return;
+    if (isExtracting || isVaultUploading) {
+      await notify("Another file is currently being processed. Please wait for it to finish.", "Upload In Progress", "warning");
+      return;
+    }
+
+    const queueItems = createAiBatchItems(selectedFiles);
+    setAiBatchQueue(queueItems);
+    setAiBatchProgress({ current: 0, total: selectedFiles.length });
+    setIsAiBatchPaused(false);
+    setLastExtractionSummary("");
+
+    let driveUploaded = 0;
+    let mergedOnly = 0;
+    let failed = 0;
+    let batchPaused = false;
+
+    try {
+      for (let index = 0; index < selectedFiles.length; index++) {
+        const file = selectedFiles[index];
+        const queueItem = queueItems[index];
+        setAiBatchProgress({ current: index + 1, total: selectedFiles.length });
+        const result = await processAttachment(file, false, undefined, {
+          queueItemId: queueItem.id,
+          batchIndex: index + 1,
+          batchTotal: selectedFiles.length,
+          preserveIndicators: true,
+        });
+
+        if (result.paused) {
+          batchPaused = true;
+          setIsAiBatchPaused(true);
+          pausePendingAiBatchItems(result.message || "Gemini free-tier quota is unavailable.");
+          setLastExtractionSummary(`AI extraction paused at image ${index + 1} of ${selectedFiles.length}. ${result.message || "Check Gemini quota and resume by uploading the remaining images later."}`);
+          break;
+        }
+
+        if (result.ok && result.driveUploaded) {
+          driveUploaded += 1;
+        } else if (result.ok) {
+          mergedOnly += 1;
+        } else {
+          failed += 1;
+        }
+      }
+    } finally {
+      resetUploadIndicatorsSoon();
+    }
+
+    if (!batchPaused) {
+      setLastExtractionSummary(`Batch complete: ${driveUploaded} image(s) extracted and saved to Drive, ${mergedOnly} image(s) merged without Drive upload, ${failed} failed.`);
     }
   };
 
@@ -2050,9 +2200,7 @@ export default function AddPatientView({
     }
     const files = e.dataTransfer.files;
     if (files && files.length > 0) {
-      for (let i = 0; i < files.length; i++) {
-        await processAttachment(files[i]);
-      }
+      await processAiExtractionBatch(files);
     }
   };
 
@@ -2063,9 +2211,7 @@ export default function AddPatientView({
     }
     const files = e.target.files;
     if (files && files.length > 0) {
-      for (let i = 0; i < files.length; i++) {
-        await processAttachment(files[i]);
-      }
+      await processAiExtractionBatch(files);
     }
     // Reset input so same file can be re-selected
     e.target.value = "";
@@ -2084,7 +2230,7 @@ export default function AddPatientView({
 
   const getAiRetryDelay = (error: any, attempt: number) => {
     const serverDelay = error instanceof ApiError ? Number(error.body?.retryAfterMs || 0) : 0;
-    if (Number.isFinite(serverDelay) && serverDelay > 0) return Math.min(60_000, serverDelay + 1_000);
+    if (Number.isFinite(serverDelay) && serverDelay > 0) return serverDelay + 1_000;
     return Math.min(30_000, 5_000 + attempt * 2_500);
   };
 
@@ -2092,24 +2238,33 @@ export default function AddPatientView({
     file: File,
     base64: string,
     uploadPatientId: string,
-    sectionTarget?: { section: string; label: string }
+    sectionTarget?: { section: string; label: string },
+    options: ProcessAttachmentOptions = {}
   ) => {
     let attempt = 0;
 
     while (true) {
       const modelIndex = attempt % AI_EXTRACTION_MODELS.length;
       const modelName = AI_EXTRACTION_MODELS[modelIndex];
-      setExtractProgress(Math.min(62, 24 + attempt * 4));
-      setExtractStage(attempt === 0
+      const attemptStage = attempt === 0
         ? `Sending document to AI form-fill agent (${modelName})`
-        : `Retry ${attempt + 1}: trying fallback AI model (${modelName})`
-      );
+        : `Retry ${attempt + 1}: trying fallback AI model (${modelName})`;
+      setExtractProgress(Math.min(62, 24 + attempt * 4));
+      setExtractStage(attemptStage);
+      updateAiBatchItem(options.queueItemId, {
+        status: "extracting",
+        progress: Math.min(62, 24 + attempt * 4),
+        stage: options.batchTotal ? `Image ${options.batchIndex} of ${options.batchTotal}: ${attemptStage}` : attemptStage,
+        attempts: attempt + 1,
+        model: modelName,
+        error: undefined,
+      });
 
       try {
         const response = await apiFetch("/api/document-fill", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          timeout: AI_EXTRACTION_REQUEST_TIMEOUT_MS,
+          timeout: 0,
           retries: 0,
           body: JSON.stringify({
             fileContent: base64,
@@ -2129,14 +2284,26 @@ export default function AddPatientView({
         }
         return extractionResponse;
       } catch (error: any) {
+        if (isQuotaPauseAiExtractionError(error)) {
+          throw error;
+        }
         if (!isRetryableAiExtractionError(error)) {
           throw error;
         }
 
         const waitMs = getAiRetryDelay(error, attempt);
+        const waitSeconds = Math.ceil(waitMs / 1000);
         console.warn("AI document understanding timed out; retrying with fallback model.", error);
         setExtractProgress(Math.min(78, 34 + attempt * 4));
-        setExtractStage(`AI model or free-tier quota is temporarily unavailable. Waiting ${Math.ceil(waitMs / 1000)}s, then continuing.`);
+        setExtractStage(`AI model or free-tier quota is temporarily unavailable. Waiting ${waitSeconds}s, then continuing.`);
+        updateAiBatchItem(options.queueItemId, {
+          status: "retry-waiting",
+          progress: Math.min(78, 34 + attempt * 4),
+          stage: `Waiting ${waitSeconds}s for Gemini retry allowance, then continuing with fallback model.`,
+          attempts: attempt + 1,
+          model: modelName,
+          error: error?.message || "Temporary AI extraction failure.",
+        });
         await waitForAiRetry(waitMs);
         attempt += 1;
       }
@@ -2144,7 +2311,12 @@ export default function AddPatientView({
   };
 
   // AI document understanding or regular file upload processor
-  const processAttachment = async (file: File, isPureMedia = false, sectionTarget?: { section: string; label: string }) => {
+  const processAttachment = async (
+    file: File,
+    isPureMedia = false,
+    sectionTarget?: { section: string; label: string },
+    options: ProcessAttachmentOptions = {}
+  ): Promise<ProcessAttachmentResult> => {
     if (isPureMedia) {
       setIsVaultUploading(true);
       setVaultProgress(12);
@@ -2153,16 +2325,30 @@ export default function AddPatientView({
       setIsExtracting(true);
       setExtractProgress(8);
       setExtractStage("Reading clinical document");
+      updateAiBatchItem(options.queueItemId, {
+        status: "extracting",
+        progress: 8,
+        stage: options.batchTotal ? `Image ${options.batchIndex} of ${options.batchTotal}: reading clinical document` : "Reading clinical document",
+        error: undefined,
+      });
     }
     if (sectionTarget?.section) {
       setActiveUploadSection(sectionTarget.section);
     }
     try {
       const base64 = await convertToBase64(file);
-      let uploadPatientId = formState.id || "";
+      let uploadPatientId = formStateLatestRef.current.id || "";
       if (!uploadPatientId) {
         const savedId = await ensurePatientSavedBeforeUpload();
-        if (!savedId) return;
+        if (!savedId) {
+          updateAiBatchItem(options.queueItemId, {
+            status: "failed",
+            progress: 0,
+            stage: "Patient save failed before extraction",
+            error: "Could not save patient record before upload.",
+          });
+          return { ok: false, message: "Could not save patient record before upload." };
+        }
         uploadPatientId = savedId;
       }
       if (isPureMedia) {
@@ -2171,6 +2357,11 @@ export default function AddPatientView({
       } else {
         setExtractProgress(24);
         setExtractStage("Sending document to AI form-fill agent");
+        updateAiBatchItem(options.queueItemId, {
+          status: "extracting",
+          progress: 24,
+          stage: options.batchTotal ? `Image ${options.batchIndex} of ${options.batchTotal}: sending to AI form-fill agent` : "Sending document to AI form-fill agent",
+        });
       }
 
       let extractedData: any = {};
@@ -2179,9 +2370,14 @@ export default function AddPatientView({
       if (!isPureMedia) {
         try {
           // Trigger AI document understanding and keep retrying transient timeouts before any Drive upload.
-          const extractionResponse = await runAiDocumentFillUntilComplete(file, base64, uploadPatientId, sectionTarget);
+          const extractionResponse = await runAiDocumentFillUntilComplete(file, base64, uploadPatientId, sectionTarget, options);
           setExtractProgress(68);
           setExtractStage("Mapping understood clinical facts to form fields");
+          updateAiBatchItem(options.queueItemId, {
+            status: "extracting",
+            progress: 68,
+            stage: "Mapping understood clinical facts to form fields",
+          });
           const {
             driveFile: extractedDriveFile,
             agentReport: extractedAgentReport,
@@ -2261,6 +2457,12 @@ export default function AddPatientView({
           setExtractedFields(new Set(sparklesKeys));
           setExtractProgress(92);
           setExtractStage("AI filled the form");
+          updateAiBatchItem(options.queueItemId, {
+            status: "merged",
+            progress: 92,
+            stage: "AI extraction merged into the form",
+            error: undefined,
+          });
           setLastExtractionSummary(agentReport
             ? `${agentReport.fieldsFilled || 0} field group(s) and ${agentReport.rowsAdded || 0} row(s) filled from ${file.name}. Existing filled data was preserved.`
             : `${sparklesKeys.length} field group${sparklesKeys.length === 1 ? "" : "s"} filled from ${file.name}. Existing filled data was preserved.`
@@ -2268,13 +2470,23 @@ export default function AddPatientView({
         } catch (error: any) {
           console.error("AI document understanding failed:", error);
           setExtractStage("AI extraction stopped before Drive upload");
-          const isQuotaStop = error instanceof ApiError && error.body?.code === "FREE_QUOTA_EXHAUSTED";
+          const isQuotaStop = isQuotaPauseAiExtractionError(error);
+          updateAiBatchItem(options.queueItemId, {
+            status: isQuotaStop ? "paused" : "failed",
+            progress: isQuotaStop ? Math.max(1, extractProgress) : 0,
+            stage: isQuotaStop ? "Paused by Gemini free-tier quota" : "AI extraction failed before Drive upload",
+            error: error?.message || "AI extraction failed.",
+          });
           await notify(
             error?.message || "AI could not complete extraction. The source document was not uploaded to Drive because AI filling did not finish.",
             isQuotaStop ? "Gemini Free Quota Exhausted" : "AI Fill Failed",
             "danger"
           );
-          return;
+          return {
+            ok: false,
+            paused: isQuotaStop,
+            message: error?.message || "AI extraction failed.",
+          };
         }
       }
 
@@ -2282,6 +2494,15 @@ export default function AddPatientView({
       // Format: Google Drive / Patients_Vault / [LastName_Initials]
       // Skip if already uploaded during AI document processing (driveFile present in response)
       const alreadyUploaded = !isPureMedia && driveFile;
+      let sourceSavedToDrive = Boolean(alreadyUploaded);
+      if (alreadyUploaded) {
+        updateAiBatchItem(options.queueItemId, {
+          status: "drive-uploaded",
+          progress: 100,
+          stage: "AI extraction complete and source image saved to Drive",
+          error: undefined,
+        });
+      }
       if (onUploadFile && uploadPatientId && !alreadyUploaded) {
         try {
           if (isPureMedia) {
@@ -2290,6 +2511,11 @@ export default function AddPatientView({
           } else {
             setExtractProgress(96);
             setExtractStage("Saving AI-processed source file to Drive");
+            updateAiBatchItem(options.queueItemId, {
+              status: "merged",
+              progress: 96,
+              stage: "Saving AI-processed source file to Drive",
+            });
           }
           await onUploadFile({
             name: file.name,
@@ -2302,10 +2528,29 @@ export default function AddPatientView({
           if (isPureMedia) {
             setVaultProgress(100);
             setVaultStage("Upload complete");
+          } else {
+            sourceSavedToDrive = true;
+            updateAiBatchItem(options.queueItemId, {
+              status: "drive-uploaded",
+              progress: 100,
+              stage: "AI extraction complete and source image saved to Drive",
+              error: undefined,
+            });
           }
         } catch (error) {
           console.error("Drive upload failed after AI fill:", error);
+          updateAiBatchItem(options.queueItemId, {
+            status: "failed",
+            progress: 96,
+            stage: "Form filled, but Drive upload failed",
+            error: error instanceof Error ? error.message : "Drive upload failed after AI fill.",
+          });
           await notify("AI form filling completed, but the file could not be saved to Google Drive. Save the patient record first, then upload media again from the patient dossier.", "Drive Upload Failed", "warning");
+          return {
+            ok: true,
+            driveUploaded: false,
+            message: "AI form filling completed, but Drive upload failed.",
+          };
         }
       }
       if (!isPureMedia) {
@@ -2314,20 +2559,28 @@ export default function AddPatientView({
       } else if (!uploadPatientId) {
         await notify("Save the patient record first, then upload media to the patient-specific Google Drive folder.", "Save Patient First", "warning");
       }
+      return {
+        ok: true,
+        driveUploaded: !isPureMedia && sourceSavedToDrive,
+      };
 
     } catch (e) {
       console.error("File processing failed:", e);
+      updateAiBatchItem(options.queueItemId, {
+        status: "failed",
+        progress: 0,
+        stage: "File processing failed before AI form filling",
+        error: e instanceof Error ? e.message : "File processing failed.",
+      });
       await notify("File processing failed before AI form filling. Please try a smaller file or a supported clinical document.", "File Processing Failed", "danger");
+      return {
+        ok: false,
+        message: e instanceof Error ? e.message : "File processing failed.",
+      };
     } finally {
-      setTimeout(() => {
-        setIsExtracting(false);
-        setExtractProgress(0);
-        setExtractStage("");
-        setIsVaultUploading(false);
-        setVaultProgress(0);
-        setVaultStage("");
-        setActiveUploadSection(null);
-      }, 1800);
+      if (!options.preserveIndicators) {
+        resetUploadIndicatorsSoon();
+      }
     }
   };
 
@@ -2662,6 +2915,28 @@ export default function AddPatientView({
     });
   };
 
+  const aiBatchStatusStyles: Record<AiBatchQueueStatus, string> = {
+    pending: "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700",
+    extracting: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-800",
+    "retry-waiting": "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800",
+    merged: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800",
+    "drive-uploaded": "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/30 dark:text-teal-300 dark:border-teal-800",
+    failed: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-300 dark:border-red-800",
+    paused: "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/30 dark:text-violet-300 dark:border-violet-800",
+  };
+
+  const aiBatchStatusLabel: Record<AiBatchQueueStatus, string> = {
+    pending: "Pending",
+    extracting: "Extracting",
+    "retry-waiting": "Retry waiting",
+    merged: "Merged",
+    "drive-uploaded": "Drive uploaded",
+    failed: "Failed",
+    paused: "Paused",
+  };
+
+  const aiBatchCompletedCount = aiBatchQueue.filter(item => ["merged", "drive-uploaded", "failed", "paused"].includes(item.status)).length;
+
   const StageProgressBar = ({ value, label, tone = "ai" }: { value: number; label: string; tone?: "ai" | "drive" }) => (
     <div className="mt-4 rounded-2xl border border-natural-border/70 dark:border-slate-700 bg-theme-surface/55 dark:bg-slate-900/55 p-3 shadow-inner">
       <div className="flex items-center justify-between gap-3 mb-2">
@@ -2827,6 +3102,74 @@ export default function AddPatientView({
 
             {isExtracting && (
               <StageProgressBar value={extractProgress} label={extractStage || "AI form filling running"} tone="ai" />
+            )}
+            {aiBatchQueue.length > 0 && (
+              <div className="mt-4 rounded-2xl border border-natural-border/70 dark:border-slate-700 bg-theme-surface/70 dark:bg-slate-900/60 p-3">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-natural-border/40 dark:border-slate-700 pb-2 mb-2">
+                  <div className="flex items-center gap-2">
+                    <FileStack className="h-4 w-4 text-natural-accent" />
+                    <div>
+                      <p className="text-[11.5px] font-bold text-slate-800 dark:text-slate-100">AI extraction batch queue</p>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                        {aiBatchProgress.total > 0
+                          ? `Image ${Math.max(1, aiBatchProgress.current)} of ${aiBatchProgress.total} - ${aiBatchCompletedCount} completed`
+                          : `${aiBatchCompletedCount} completed`}
+                      </p>
+                    </div>
+                  </div>
+                  <span className={`self-start sm:self-center rounded-full border px-2 py-1 text-[10px] font-bold ${
+                    isAiBatchPaused
+                      ? "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/30 dark:text-violet-300 dark:border-violet-800"
+                      : "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800"
+                  }`}>
+                    {isAiBatchPaused ? "Paused by quota" : "Sequential processing"}
+                  </span>
+                </div>
+                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                  {aiBatchQueue.map((item, index) => (
+                    <div key={item.id} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-950/25 p-2.5">
+                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 min-w-0">
+                            {item.status === "extracting" || item.status === "retry-waiting" ? (
+                              <RefreshCw className="h-3.5 w-3.5 animate-spin text-natural-accent flex-shrink-0" />
+                            ) : item.status === "drive-uploaded" || item.status === "merged" ? (
+                              <CheckCircle className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-300 flex-shrink-0" />
+                            ) : item.status === "failed" || item.status === "paused" ? (
+                              <AlertTriangle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-300 flex-shrink-0" />
+                            ) : (
+                              <Clock className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                            )}
+                            <p className="truncate text-[11.5px] font-bold text-slate-800 dark:text-slate-100">
+                              {index + 1}. {item.name}
+                            </p>
+                          </div>
+                          <p className="mt-0.5 text-[10px] text-slate-500 dark:text-slate-400 truncate">
+                            {formatFileSize(item.size)}{item.model ? ` - ${item.model}` : ""}{item.attempts > 0 ? ` - attempt ${item.attempts}` : ""}
+                          </p>
+                        </div>
+                        <span className={`inline-flex rounded-full border px-2 py-0.5 text-[9px] font-bold whitespace-nowrap ${aiBatchStatusStyles[item.status]}`}>
+                          {aiBatchStatusLabel[item.status]}
+                        </span>
+                      </div>
+                      <div className="mt-2 h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${item.status === "failed" ? "bg-red-500" : item.status === "retry-waiting" ? "bg-amber-500" : "bg-natural-accent"}`}
+                          style={{ width: `${Math.max(4, Math.min(100, item.progress))}%` }}
+                        />
+                      </div>
+                      <p className="mt-1.5 text-[10px] text-slate-600 dark:text-slate-300 line-clamp-2">
+                        {item.stage}
+                      </p>
+                      {item.error && (
+                        <p className="mt-1 text-[9px] text-red-600 dark:text-red-300 line-clamp-2">
+                          {item.error}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
             {!isExtracting && lastExtractionSummary && (
               <div className="mt-4 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/80 dark:bg-emerald-950/25 px-3 py-2 flex items-start gap-2">

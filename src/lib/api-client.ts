@@ -24,7 +24,7 @@ interface ApiFetchOptions extends RequestInit {
   retries?: number;
   /** Whether to retry on 5xx / network errors (default true when retries>0). */
   retryOn5xx?: boolean;
-  /** Timeout in ms (default 120000). AI document understanding can need 60-90s for Gemini. */
+  /** Timeout in ms (default 120000). Set 0 to wait for the server/provider response. */
   timeout?: number;
 }
 
@@ -47,16 +47,16 @@ export async function apiFetch(
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeout);
+      const controller = timeout > 0 ? new AbortController() : null;
+      const timer = controller ? setTimeout(() => controller.abort(), timeout) : null;
 
       const response = await fetch(url, {
         ...options,
         headers,
-        signal: controller.signal,
+        signal: controller?.signal,
       });
 
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
 
       // Success — return raw Response for backward compat
       if (response.ok) return response;
