@@ -23,7 +23,13 @@ import {
 import { generateAnalyticsSpec, generateStatisticalSpec } from "./server-lib/analytics-prompt.js";
 import { cleanBody, patientSchema } from "./server-lib/validate.js";
 import { ensureDriveFolder, uploadToDrive } from "./server-lib/drive.js";
-import { buildPatientCsv, patientExportFileName } from "./server-lib/patient-export.js";
+import {
+  buildPatientCsv,
+  buildPatientExportColumnTree,
+  buildSelectedPatientCsv,
+  patientExportFileName,
+  type PatientExportMode,
+} from "./server-lib/patient-export.js";
 
 dotenv.config();
 
@@ -679,12 +685,59 @@ app.post(["/api/extract", "/api/document-fill"], async (req, res) => {
 
 app.get("/api/patients/count", countPatients as any);
 
+function parseSelectedPatientExportBody(body: any) {
+  if (typeof body === "string") {
+    try {
+      body = JSON.parse(body);
+    } catch {
+      body = {};
+    }
+  }
+  const mode: PatientExportMode = body?.mode === "table-row" ? "table-row" : "patient-wide";
+  const columns = Array.isArray(body?.columns)
+    ? body.columns.map((column: unknown) => String(column || "").trim()).filter(Boolean)
+    : [];
+  const rowSource = String(body?.rowSource || "").trim();
+  return { mode, columns, rowSource };
+}
+
+async function listExportablePatients(req: any) {
+  const user = expressUser(req);
+  return (await listCollection("patients"))
+    .filter((patient: any) => user.role === "admin" || !patient.createdBy || patient.createdBy === user.uid)
+    .sort((a: any, b: any) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
+}
+
+app.get("/api/patients/export/columns", async (req, res) => {
+  try {
+    const patients = await listExportablePatients(req);
+    return res.json(buildPatientExportColumnTree(patients));
+  } catch (error: any) {
+    apiError(res, error, 500, "Patient export columns failed.");
+  }
+});
+
+app.post("/api/patients/export", async (req, res) => {
+  try {
+    const patients = await listExportablePatients(req);
+    const selected = parseSelectedPatientExportBody(req.body || {});
+    if (!selected.columns.length) {
+      return res.status(400).json({ error: "Select at least one CSV column before exporting." });
+    }
+    if (selected.mode === "table-row" && !selected.rowSource) {
+      return res.status(400).json({ error: "Select one repeatable table source for table-row CSV export." });
+    }
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${patientExportFileName("csv")}"`);
+    return res.send(buildSelectedPatientCsv(patients, selected));
+  } catch (error: any) {
+    apiError(res, error, 500, "Selected patient export failed.");
+  }
+});
+
 app.get("/api/patients/export", async (req, res) => {
   try {
-    const user = expressUser(req);
-    const patients = (await listCollection("patients"))
-      .filter((patient: any) => user.role === "admin" || !patient.createdBy || patient.createdBy === user.uid)
-      .sort((a: any, b: any) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
+    const patients = await listExportablePatients(req);
     const format = String(req.query.format || "csv").toLowerCase();
 
     if (format === "json") {

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { 
   Settings, 
   Moon, 
@@ -18,9 +18,16 @@ import {
   Monitor,
   X,
   User,
-  Save
+  Save,
+  Search,
+  ChevronDown,
+  ChevronRight,
+  Columns3,
+  FileSpreadsheet,
+  ListChecks,
+  Table2
 } from "lucide-react";
-import { apiFetch } from "../lib/api-client";
+import { apiFetch, apiFetchJson } from "../lib/api-client";
 import { confirmDialog, notify } from "./AppDialog";
 import { doc, setDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
@@ -29,6 +36,155 @@ interface SettingsViewProps {
   currentUser: { uid?: string; name: string; role: string; email?: string };
   onWipeDatabase: () => Promise<void>;
   onUpdateUser?: (updates: Partial<{ name: string }>) => void;
+}
+
+type CsvExportMode = "patient-wide" | "table-row";
+
+interface ExportColumnNode {
+  key: string;
+  path: string;
+  label: string;
+  kind: "group" | "field" | "table";
+  selectable: boolean;
+  repeated?: boolean;
+  repeatRoot?: string;
+  children?: ExportColumnNode[];
+}
+
+interface ExportTableSource {
+  path: string;
+  label: string;
+  repeatRoot: string;
+}
+
+interface ExportColumnsResponse {
+  tree: ExportColumnNode[];
+  requiredColumns: string[];
+  defaultColumns: string[];
+  tableSources: ExportTableSource[];
+}
+
+const CSV_PRESETS = [
+  { id: "all", label: "All fields", sectionKeys: [] },
+  { id: "identity", label: "Identity/Demographics", sectionKeys: ["patientIdentifiers", "demographics", "oncology", "hospital"] },
+  { id: "investigations", label: "Investigations", sectionKeys: ["investigations", "histologyGrading"] },
+  { id: "tumor", label: "Tumor characteristics", sectionKeys: ["tumorCharacteristics", "clinicalStaging"] },
+  { id: "treatment", label: "Treatment", sectionKeys: ["adjuvantTherapy", "preOperativeAssessment", "definitiveSurgery", "treatments", "surgicalProcedures", "care"] },
+  { id: "outcomes", label: "Outcomes", sectionKeys: ["treatmentOutcome", "afterSurgicalTherapies", "followUpPrognosis", "oncologicalOutcome"] },
+  { id: "ai", label: "AI backups", sectionKeys: ["extraParams", "supplementary", "documentExtractions"] },
+  { id: "system", label: "System metadata", sectionKeys: ["system"] },
+];
+
+function collectSelectablePaths(nodes: ExportColumnNode[]): string[] {
+  return nodes.flatMap((node) => {
+    const own = node.selectable ? [node.path] : [];
+    return [...own, ...collectSelectablePaths(node.children || [])];
+  });
+}
+
+function collectPathsForRoots(nodes: ExportColumnNode[], rootKeys: string[]): string[] {
+  const selected = new Set(rootKeys);
+  return nodes.flatMap((node) => selected.has(node.key) ? collectSelectablePaths([node]) : []);
+}
+
+function filterColumnTree(nodes: ExportColumnNode[], query: string): ExportColumnNode[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return nodes;
+  return nodes.flatMap((node) => {
+    const children = filterColumnTree(node.children || [], needle);
+    const match = node.label.toLowerCase().includes(needle) || node.path.toLowerCase().includes(needle);
+    if (!match && !children.length) return [];
+    return [{ ...node, children }];
+  });
+}
+
+function downloadBlobResponse(response: Response, fallbackExtension: "csv" | "json") {
+  return response.blob().then((blob) => {
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    const disposition = response.headers.get("content-disposition") || "";
+    const fileName = disposition.match(/filename="([^"]+)"/)?.[1]
+      || `FullBackups_OncoRegistry_${new Date().toISOString().split("T")[0]}.${fallbackExtension}`;
+    link.href = url;
+    link.download = fileName;
+    link.click();
+    URL.revokeObjectURL(url);
+  });
+}
+
+function ColumnTreeRow({
+  node,
+  selected,
+  expanded,
+  onToggleExpanded,
+  onTogglePaths,
+  depth = 0,
+}: {
+  node: ExportColumnNode;
+  selected: Set<string>;
+  expanded: Set<string>;
+  onToggleExpanded: (path: string) => void;
+  onTogglePaths: (paths: string[], checked: boolean) => void;
+  depth?: number;
+}) {
+  const children = node.children || [];
+  const hasChildren = children.length > 0;
+  const descendantPaths = collectSelectablePaths([node]);
+  const checkedCount = descendantPaths.filter((path) => selected.has(path)).length;
+  const checked = descendantPaths.length > 0 && checkedCount === descendantPaths.length;
+  const partial = checkedCount > 0 && !checked;
+  const isExpanded = expanded.has(node.path);
+  const label = partial ? `${node.label} (${checkedCount}/${descendantPaths.length})` : node.label;
+
+  return (
+    <div>
+      <div
+        className="flex items-center gap-2 py-1.5 pr-2 text-[11.5px] text-slate-700 dark:text-slate-250 hover:bg-slate-50 dark:hover:bg-slate-900/60 rounded-lg"
+        style={{ paddingLeft: `${depth * 14 + 6}px` }}
+      >
+        <button
+          type="button"
+          onClick={() => hasChildren && onToggleExpanded(node.path)}
+          className="h-5 w-5 inline-flex items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-20"
+          disabled={!hasChildren}
+          aria-label={isExpanded ? "Collapse" : "Expand"}
+        >
+          {hasChildren ? (isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />) : null}
+        </button>
+        <input
+          type="checkbox"
+          checked={checked}
+          disabled={!descendantPaths.length}
+          onChange={(event) => onTogglePaths(descendantPaths, event.target.checked)}
+          className="h-3.5 w-3.5 rounded border-slate-300 text-natural-accent focus:ring-natural-accent"
+        />
+        <button
+          type="button"
+          onClick={() => hasChildren ? onToggleExpanded(node.path) : onTogglePaths(descendantPaths, !checked)}
+          className="min-w-0 flex-1 text-left"
+        >
+          <span className={`font-semibold ${partial ? "text-natural-accent dark:text-natural-gold" : ""}`}>{label}</span>
+          {node.selectable && node.path !== node.label && (
+            <span className="ml-2 text-[10.5px] text-slate-400">{node.path}</span>
+          )}
+        </button>
+        {node.repeated && (
+          <span className="rounded-full border border-natural-border px-2 py-0.5 text-[10px] font-bold text-slate-500 dark:text-slate-400">table</span>
+        )}
+      </div>
+      {hasChildren && isExpanded && children.map((child) => (
+        <ColumnTreeRow
+          key={child.path}
+          node={child}
+          selected={selected}
+          expanded={expanded}
+          onToggleExpanded={onToggleExpanded}
+          onTogglePaths={onTogglePaths}
+          depth={depth + 1}
+        />
+      ))}
+    </div>
+  );
 }
 
 export default function SettingsView({ currentUser, onWipeDatabase, onUpdateUser }: SettingsViewProps) {
@@ -68,6 +224,15 @@ export default function SettingsView({ currentUser, onWipeDatabase, onUpdateUser
   });
   const [isRefreshingQuota, setIsRefreshingQuota] = useState(false);
   const [showAgreementModal, setShowAgreementModal] = useState(false);
+  const [showCsvColumnModal, setShowCsvColumnModal] = useState(false);
+  const [csvColumns, setCsvColumns] = useState<ExportColumnsResponse | null>(null);
+  const [loadingCsvColumns, setLoadingCsvColumns] = useState(false);
+  const [exportingSelectedCsv, setExportingSelectedCsv] = useState(false);
+  const [selectedCsvColumns, setSelectedCsvColumns] = useState<string[]>([]);
+  const [expandedCsvNodes, setExpandedCsvNodes] = useState<string[]>([]);
+  const [csvSearch, setCsvSearch] = useState("");
+  const [csvExportMode, setCsvExportMode] = useState<CsvExportMode>("patient-wide");
+  const [csvTableRowSource, setCsvTableRowSource] = useState("");
 
   // Trigger Theme change
   const handleToggleTheme = (mode: "system" | "light" | "dark") => {
@@ -78,22 +243,19 @@ export default function SettingsView({ currentUser, onWipeDatabase, onUpdateUser
     localStorage.setItem("theme", mode);
   };
 
+  const selectedCsvSet = useMemo(() => new Set(selectedCsvColumns), [selectedCsvColumns]);
+  const expandedCsvSet = useMemo(() => new Set(expandedCsvNodes), [expandedCsvNodes]);
+  const filteredCsvTree = useMemo(() => filterColumnTree(csvColumns?.tree || [], csvSearch), [csvColumns, csvSearch]);
+  const allSelectableCsvPaths = useMemo(() => collectSelectablePaths(csvColumns?.tree || []), [csvColumns]);
+  const selectedCsvCount = selectedCsvColumns.length;
+
   const downloadPatientExport = async (format: "csv" | "json") => {
     const response = await apiFetch(`/api/patients/export?format=${format}`);
     if (!response.ok) {
       await notify("Could not export the patient registry.", "Export Failed", "danger");
       return;
     }
-    const blob = await response.blob();
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    const disposition = response.headers.get("content-disposition") || "";
-    const fileName = disposition.match(/filename="([^"]+)"/)?.[1]
-      || `FullBackups_OncoRegistry_${new Date().toISOString().split("T")[0]}.${format}`;
-    link.href = url;
-    link.download = fileName;
-    link.click();
-    URL.revokeObjectURL(url);
+    await downloadBlobResponse(response, format);
   };
 
   // CSV/JSON overall database backups
@@ -103,6 +265,91 @@ export default function SettingsView({ currentUser, onWipeDatabase, onUpdateUser
 
   const handleBackupAllCSV = async () => {
     await downloadPatientExport("csv");
+  };
+
+  const loadCsvColumns = async () => {
+    setLoadingCsvColumns(true);
+    try {
+      const data = await apiFetchJson<ExportColumnsResponse>("/api/patients/export/columns");
+      const allPaths = collectSelectablePaths(data.tree);
+      const defaultSelection = collectPathsForRoots(data.tree, ["patientIdentifiers", "demographics"]);
+      setCsvColumns(data);
+      setSelectedCsvColumns(defaultSelection.length ? defaultSelection : data.requiredColumns);
+      setExpandedCsvNodes(data.tree.map((node) => node.path));
+      setCsvTableRowSource(data.tableSources[0]?.path || "");
+      if (!allPaths.length) {
+        await notify("No exportable columns were found.", "CSV Columns", "danger");
+      }
+    } catch (error) {
+      await notify("Could not load export columns.", "Export Failed", "danger");
+    } finally {
+      setLoadingCsvColumns(false);
+    }
+  };
+
+  const handleOpenCsvColumnModal = async () => {
+    setShowCsvColumnModal(true);
+    if (!csvColumns) await loadCsvColumns();
+  };
+
+  const handleToggleCsvExpanded = (path: string) => {
+    setExpandedCsvNodes((current) => current.includes(path)
+      ? current.filter((item) => item !== path)
+      : [...current, path]);
+  };
+
+  const handleToggleCsvPaths = (paths: string[], checked: boolean) => {
+    setSelectedCsvColumns((current) => {
+      const next = new Set(current);
+      for (const path of paths) {
+        if (checked) next.add(path);
+        else next.delete(path);
+      }
+      return Array.from(next);
+    });
+  };
+
+  const handleApplyCsvPreset = (presetId: string) => {
+    if (!csvColumns) return;
+    const preset = CSV_PRESETS.find((item) => item.id === presetId);
+    if (!preset) return;
+    const paths = preset.id === "all"
+      ? allSelectableCsvPaths
+      : collectPathsForRoots(csvColumns.tree, preset.sectionKeys);
+    setSelectedCsvColumns(paths);
+    const roots = preset.id === "all" ? csvColumns.tree.map((node) => node.path) : preset.sectionKeys;
+    setExpandedCsvNodes(Array.from(new Set([...expandedCsvNodes, ...roots])));
+  };
+
+  const handleDownloadSelectedCsv = async () => {
+    if (!selectedCsvColumns.length) {
+      await notify("Select at least one export column.", "Export Columns Required", "danger");
+      return;
+    }
+    if (csvExportMode === "table-row" && !csvTableRowSource) {
+      await notify("Select one repeatable table source for table-row CSV export.", "Table Source Required", "danger");
+      return;
+    }
+    setExportingSelectedCsv(true);
+    try {
+      const response = await apiFetch("/api/patients/export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          format: "csv",
+          mode: csvExportMode,
+          columns: selectedCsvColumns,
+          rowSource: csvExportMode === "table-row" ? csvTableRowSource : undefined,
+        }),
+        timeout: 0,
+      });
+      await downloadBlobResponse(response, "csv");
+      await notify("Selected CSV export downloaded.", "Export Complete", "success");
+    } catch (error) {
+      await notify("Could not export the selected CSV columns.", "Export Failed", "danger");
+    } finally {
+      setExportingSelectedCsv(false);
+    }
   };
 
   // Deep Wipe database
@@ -198,6 +445,175 @@ export default function SettingsView({ currentUser, onWipeDatabase, onUpdateUser
               >
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showCsvColumnModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3">
+          <div className="w-full max-w-6xl max-h-[92vh] overflow-hidden rounded-xl bg-theme-surface dark:bg-slate-900 shadow-2xl border border-slate-200 dark:border-slate-700 flex flex-col">
+            <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950">
+              <div className="min-w-0 flex items-center gap-3">
+                <Columns3 className="h-5 w-5 text-natural-accent flex-shrink-0" />
+                <div className="min-w-0">
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-theme-on-accent">Customize CSV Columns</h3>
+                  <p className="text-[11.5px] text-slate-500 dark:text-slate-400 truncate">
+                    {selectedCsvCount} selected columns. Patient identity columns are always included by the server.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCsvColumnModal(false)}
+                className="rounded-lg p-2 text-slate-600 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-800 transition"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] gap-0 overflow-hidden">
+              <aside className="border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-700 p-4 space-y-4 bg-slate-50/70 dark:bg-slate-950/40">
+                <div className="space-y-2">
+                  <h4 className="text-[11px] uppercase tracking-wide font-bold text-slate-500">Export Mode</h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setCsvExportMode("patient-wide")}
+                      className={`p-2.5 rounded-lg border text-[11.5px] font-bold flex items-center justify-center gap-1.5 ${
+                        csvExportMode === "patient-wide"
+                          ? "bg-natural-accent text-theme-on-accent border-natural-accent"
+                          : "bg-theme-surface dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-250"
+                      }`}
+                    >
+                      <FileSpreadsheet className="h-3.5 w-3.5" />
+                      Patient
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCsvExportMode("table-row")}
+                      className={`p-2.5 rounded-lg border text-[11.5px] font-bold flex items-center justify-center gap-1.5 ${
+                        csvExportMode === "table-row"
+                          ? "bg-natural-accent text-theme-on-accent border-natural-accent"
+                          : "bg-theme-surface dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-250"
+                      }`}
+                    >
+                      <Table2 className="h-3.5 w-3.5" />
+                      Table
+                    </button>
+                  </div>
+                </div>
+
+                {csvExportMode === "table-row" && (
+                  <div className="space-y-2">
+                    <label className="text-[11px] uppercase tracking-wide font-bold text-slate-500" htmlFor="csv-row-source">Table Row Source</label>
+                    <select
+                      id="csv-row-source"
+                      value={csvTableRowSource}
+                      onChange={(event) => setCsvTableRowSource(event.target.value)}
+                      className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-theme-surface dark:bg-slate-900 px-3 py-2 text-[11.5px] font-semibold text-slate-700 dark:text-slate-200"
+                    >
+                      {(csvColumns?.tableSources || []).map((source) => (
+                        <option key={source.path} value={source.path}>{source.label} ({source.path})</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <h4 className="text-[11px] uppercase tracking-wide font-bold text-slate-500">Built-in Presets</h4>
+                  <div className="grid grid-cols-1 gap-2">
+                    {CSV_PRESETS.map((preset) => (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => handleApplyCsvPreset(preset.id)}
+                        className="rounded-lg border border-slate-200 dark:border-slate-700 bg-theme-surface dark:bg-slate-900 px-3 py-2 text-left text-[11.5px] font-bold text-slate-700 dark:text-slate-250 hover:border-natural-accent hover:text-natural-accent transition"
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCsvColumns(allSelectableCsvPaths)}
+                    className="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-[11.5px] font-bold text-slate-700 dark:text-slate-250 hover:border-natural-accent transition"
+                  >
+                    Select All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCsvColumns([])}
+                    className="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-[11.5px] font-bold text-slate-700 dark:text-slate-250 hover:border-rose-500 transition"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </aside>
+
+              <main className="min-h-0 flex flex-col p-4 gap-3">
+                <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <input
+                      type="search"
+                      value={csvSearch}
+                      onChange={(event) => setCsvSearch(event.target.value)}
+                      className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-theme-surface dark:bg-slate-950 pl-9 pr-3 py-2 text-xs text-slate-800 dark:text-theme-on-accent outline-none focus:ring-1 focus:ring-natural-accent"
+                      placeholder="Search headers, subheaders, nested fields, and paths"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={loadCsvColumns}
+                    disabled={loadingCsvColumns}
+                    className="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-250 hover:border-natural-accent disabled:opacity-50 transition flex items-center justify-center gap-2"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${loadingCsvColumns ? "animate-spin" : ""}`} />
+                    Refresh
+                  </button>
+                </div>
+
+                <div className="min-h-[360px] max-h-[56vh] overflow-auto rounded-lg border border-slate-200 dark:border-slate-700 bg-theme-surface dark:bg-slate-950 p-2">
+                  {loadingCsvColumns ? (
+                    <div className="flex h-52 items-center justify-center text-xs font-bold text-slate-500">
+                      <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+                      Loading export columns...
+                    </div>
+                  ) : filteredCsvTree.length ? (
+                    filteredCsvTree.map((node) => (
+                      <ColumnTreeRow
+                        key={node.path}
+                        node={node}
+                        selected={selectedCsvSet}
+                        expanded={expandedCsvSet}
+                        onToggleExpanded={handleToggleCsvExpanded}
+                        onTogglePaths={handleToggleCsvPaths}
+                      />
+                    ))
+                  ) : (
+                    <div className="flex h-52 items-center justify-center text-xs font-bold text-slate-500">No columns match this search.</div>
+                  )}
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-slate-200 dark:border-slate-700 pt-3">
+                  <div className="text-[11.5px] text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                    <ListChecks className="h-4 w-4 text-natural-accent" />
+                    <span>{selectedCsvCount} selected; identity columns are added automatically.</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleDownloadSelectedCsv}
+                    disabled={exportingSelectedCsv || loadingCsvColumns || !selectedCsvColumns.length}
+                    className="rounded-lg bg-natural-accent hover:bg-natural-accent-dark disabled:opacity-50 text-theme-on-accent px-4 py-2.5 text-xs font-bold transition flex items-center justify-center gap-2"
+                  >
+                    <Download className="h-4 w-4" />
+                    {exportingSelectedCsv ? "Exporting..." : "Download Selected CSV"}
+                  </button>
+                </div>
+              </main>
             </div>
           </div>
         </div>
@@ -329,6 +745,17 @@ export default function SettingsView({ currentUser, onWipeDatabase, onUpdateUser
                   <span>Download Full CSV Registries</span>
                 </span>
                 <Download className="h-4 w-4 font-bold" />
+              </button>
+
+              <button
+                onClick={handleOpenCsvColumnModal}
+                className="w-full p-3.5 flex items-center justify-between rounded-xl font-bold cursor-pointer select-none text-left transition text-xs border border-natural-border bg-theme-surface dark:bg-slate-900 text-slate-700 dark:text-slate-250 hover:border-natural-accent hover:text-natural-accent"
+              >
+                <span className="flex items-center gap-2">
+                  <Columns3 className="h-4 w-4" />
+                  <span>Customize CSV Columns</span>
+                </span>
+                <ListChecks className="h-4 w-4 font-bold" />
               </button>
  
               <button

@@ -54,6 +54,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (route === "files") return files(req, res);
   if (route === "wipe") return wipe(req, res);
   if (route === "patients") return patients(req, res);
+  if (route === "patients/export/columns") {
+    req.query.exportPath = "columns";
+    return patientExport(req, res);
+  }
   if (route === "patients/export") return patientExport(req, res);
   if (route === "patients/trash") return trash(req, res);
   if (route === "patients/count") return count(req, res);
