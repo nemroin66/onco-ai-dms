@@ -1,3 +1,4 @@
+process.env.NODE_NO_DEPRECATION = "1";
 import crypto from "crypto";
 import dotenv from "dotenv";
 import express from "express";
