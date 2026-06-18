@@ -17,10 +17,8 @@ import {
   Calendar,
   Clock,
   Users,
-  HardDrive
 } from "lucide-react";
 import { PatientRecord, UserAccount } from "../types";
-import { apiFetch } from "../lib/api-client";
 
 interface HomeViewProps {
   currentUser: UserAccount;
@@ -45,21 +43,10 @@ export default function HomeView({
 }: HomeViewProps) {
 
   const [now, setNow] = useState(new Date());
-  const [storage, setStorage] = useState<{ usedFormatted: string; quotaFormatted: string; percentUsed: number; source: string } | null>(null);
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
-  }, []);
-
-  useEffect(() => {
-    const fetchStorage = async () => {
-      try {
-        const res = await apiFetch("/api/storage");
-        if (res.ok) setStorage(await res.json());
-      } catch {}
-    };
-    fetchStorage();
   }, []);
 
   // Time oriented greeting logic
@@ -70,10 +57,9 @@ export default function HomeView({
     return "Good evening";
   };
 
-  // Sort by updatedAt descending to show the most recent 10 records
+  // Sort by updatedAt descending to show the most recent 50 records
   const recentRecords = [...allPatients]
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-    .slice(0, 10);
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
@@ -123,26 +109,7 @@ export default function HomeView({
               <Users className="h-4 w-4 text-slate-500 dark:text-slate-400" />
               <span>Active: {activeCount ?? allPatients.length} · Deleted: {deletedCount} · Total: {(activeCount ?? allPatients.length) + deletedCount}</span>
             </div>
-            {storage && (
-              <div className="flex items-center gap-2 mt-2">
-                <HardDrive className="h-4 w-4 text-slate-500 dark:text-slate-400 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex justify-between text-[11.5px] font-semibold mb-0.5">
-                    <span className="text-slate-600 dark:text-slate-400">Database Storage</span>
-                    <span className="text-slate-700 dark:text-slate-300">{storage.usedFormatted} / {storage.quotaFormatted}</span>
-                  </div>
-                  <div className="w-full bg-natural-card dark:bg-slate-900 h-2 rounded-full overflow-hidden border border-natural-border dark:border-slate-800">
-                    <div className="h-full rounded-full transition-all duration-500"
-                      style={{
-                        width: `${Math.min(storage.percentUsed, 100)}%`,
-                        backgroundColor: storage.percentUsed > 80 ? "#EF4444" : storage.percentUsed > 50 ? "#F59E0B" : "#10B981"
-                      }}
-                    />
-                  </div>
-                  <p className="text-[11.5px] text-slate-400 mt-0.5">{storage.source === "real" ? "Live from Cloud Monitoring" : "Estimated from document size"}</p>
-                </div>
-              </div>
-            )}
+
           </div>
 
         </div>

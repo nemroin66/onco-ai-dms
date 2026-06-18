@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import { Shield, Search, X, Clock, User, FileText, Trash2, Upload, Database, AlertTriangle, RefreshCw } from "lucide-react";
 import { apiFetch } from "../lib/api-client";
 
@@ -35,9 +35,10 @@ function actionColor(action: string) {
 
 export default function AuditLogView() {
   const [logs, setLogs] = useState<AuditEntry[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState("");
   const [actionFilter, setActionFilter] = useState("");
+  const [loadedCount, setLoadedCount] = useState(0);
 
   const fetchLogs = useCallback(async () => {
     setLoading(true);
@@ -49,15 +50,15 @@ export default function AuditLogView() {
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
       setLogs(data.logs || []);
+      setLoadedCount(data.logs?.length || 0);
     } catch (e) {
       console.error("Failed to fetch audit logs:", e);
       setLogs([]);
+      setLoadedCount(0);
     } finally {
       setLoading(false);
     }
   }, [actionFilter]);
-
-  useEffect(() => { fetchLogs(); }, [fetchLogs]);
 
   const uniqueActions = [...new Set(logs.map(l => l.action))].sort();
 
@@ -110,11 +111,15 @@ export default function AuditLogView() {
         </select>
         <button
           onClick={fetchLogs}
-          className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition-colors"
-          title="Refresh"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-500 text-white hover:bg-indigo-600 text-xs font-bold transition-colors"
+          title="Load audit log"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          {loading ? "Loading..." : "Run"}
         </button>
+        {loadedCount > 0 && (
+          <span className="text-[11.5px] text-slate-500 font-semibold">{loadedCount} entries loaded</span>
+        )}
       </div>
 
       {/* Log Table */}

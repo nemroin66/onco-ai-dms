@@ -102,7 +102,7 @@ function AppContent() {
     setIsLoadingMain(true);
     try {
       // Patients list, including deleted records so trash can work consistently
-      const patRes = await apiFetch("/api/patients?includeDeleted=true&limit=5000");
+      const patRes = await apiFetch("/api/patients?includeDeleted=true&limit=50");
       if (patRes.ok) {
         const patientsData = await patRes.json();
         setAllPatients(patientsData.filter((p: PatientRecord) => !p.isDeleted));
@@ -393,12 +393,9 @@ function AppContent() {
         return (
           <PageTransition routeKey={routeKey} variant="slide-left">
             <SearchRecordsView
-              allPatients={allPatients}
               onViewPatient={handleViewPatient}
               onEditPatient={handleEditPatient}
               onDeletePatient={handleDeletePatient}
-              activeCount={liveCounts.active}
-              deletedCount={liveCounts.deleted}
             />
           </PageTransition>
         );

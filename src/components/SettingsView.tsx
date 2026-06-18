@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { 
   Settings, 
   Moon, 
@@ -71,10 +71,6 @@ export default function SettingsView({ currentUser, allPatients, onWipeDatabase,
   });
   const [isRefreshingQuota, setIsRefreshingQuota] = useState(false);
   const [showAgreementModal, setShowAgreementModal] = useState(false);
-
-  useEffect(() => {
-    triggerRefreshQuota();
-  }, []);
 
   // Trigger Theme change
   const handleToggleTheme = (mode: "system" | "light" | "dark") => {

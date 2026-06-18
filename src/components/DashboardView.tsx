@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
   BarChart3,
   Bot,
@@ -139,6 +139,7 @@ export default function DashboardView({ allPatients, currentUser }: DashboardVie
   const [dashboard, setDashboard] = useState<AnalyticsDashboard>(starters[0]);
   const [results, setResults] = useState<Record<string, AnalyticsResult>>({});
   const [loadingCharts, setLoadingCharts] = useState<Set<string>>(new Set());
+  const [cohortCount, setCohortCount] = useState(0);
   const [builder, setBuilder] = useState(emptyBuilder);
   const [prompt, setPrompt] = useState("");
   const [proposed, setProposed] = useState<ChartSpec | null>(null);
@@ -164,10 +165,6 @@ export default function DashboardView({ allPatients, currentUser }: DashboardVie
     if (dashboardResponse.ok) setSavedDashboards(await dashboardResponse.json());
   };
 
-  useEffect(() => {
-    loadConfiguration().catch((error) => setMessage(error.message));
-  }, []);
-
   const runChart = async (chart: ChartSpec) => {
     const configured: ChartSpec = {
       ...chart,
@@ -189,6 +186,7 @@ export default function DashboardView({ allPatients, currentUser }: DashboardVie
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Analytics query failed.");
       setResults((current) => ({ ...current, [chart.id]: data }));
+      if (data.eligibleCount) setCohortCount((prev) => Math.max(prev, data.eligibleCount));
     } finally {
       setLoadingCharts((current) => {
         const next = new Set(current);
@@ -200,14 +198,12 @@ export default function DashboardView({ allPatients, currentUser }: DashboardVie
 
   const runDashboard = async (target = dashboard) => {
     setMessage("");
+    setCohortCount(0);
+    await loadConfiguration();
     await Promise.all(target.charts.map((chart) => runChart(chart).catch((error) => {
       setMessage(error.message);
     })));
   };
-
-  useEffect(() => {
-    if (fields.length) runDashboard().catch(() => undefined);
-  }, [fields, dashboard.id, dateFrom, dateTo, oncologyFilter]);
 
   const selectDashboard = (id: string) => {
     const selected = [...starters, ...savedDashboards].find((item) => item.id === id);
@@ -382,7 +378,10 @@ export default function DashboardView({ allPatients, currentUser }: DashboardVie
             <FlaskConical className="h-4 w-4" /> Statistics Lab
           </button>
           <button type="button" onClick={() => setShowBuilder((value) => !value)} className="btn-clr-add btn-secondary px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2"><Plus className="h-4 w-4" /> Add chart</button>
-          <button type="button" onClick={() => runDashboard()} className="btn-secondary px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2"><RefreshCw className="h-4 w-4" /> Refresh</button>
+          <button type="button" onClick={() => runDashboard()} className="btn-primary px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2"><RefreshCw className="h-4 w-4" /> Run</button>
+          {cohortCount > 0 && (
+            <span className="text-[11.5px] text-slate-500 font-semibold self-center">{cohortCount} patients analyzed</span>
+          )}
           <button type="button" onClick={saveCurrentDashboard} className="btn-primary px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2"><Save className="h-4 w-4" /> Save</button>
           <button type="button" onClick={exportDashboardCsv} className="btn-clr-csv btn-secondary px-3 py-2 rounded-xl text-xs font-bold">CSV</button>
           <button type="button" onClick={exportDashboardPdf} className="btn-secondary px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2"><Download className="h-4 w-4" /> PDF</button>

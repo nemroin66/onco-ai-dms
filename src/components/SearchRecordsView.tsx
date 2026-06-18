@@ -17,21 +17,15 @@ import { PatientRecord, OncologyCategory } from "../types";
 import { apiFetch } from "../lib/api-client";
 
 interface SearchRecordsViewProps {
-  allPatients: PatientRecord[];
   onViewPatient: (pat: PatientRecord) => void;
   onEditPatient: (pat: PatientRecord) => void;
   onDeletePatient: (id: string) => void;
-  activeCount?: number;
-  deletedCount?: number;
 }
 
 export default function SearchRecordsView({ 
-  allPatients, 
   onViewPatient, 
   onEditPatient, 
   onDeletePatient,
-  activeCount,
-  deletedCount = 0
 }: SearchRecordsViewProps) {
 
   // Sorters and Filters state
@@ -45,49 +39,27 @@ export default function SearchRecordsView({
   const [sortBy, setSortBy] = useState<"name" | "updatedAt" | "overall_stage" | "oncology">("updatedAt");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
 
-  // Get unique hospitals from registered patients to populate dynamic hospital selector!
+  // Get unique hospitals from search results to populate dynamic hospital selector
   const uniqueHospitals = Array.from(
-    new Set(allPatients.map(p => p.hospital).filter(h => h && h.trim() !== ""))
+    new Set((searchResults ?? []).map(p => p.hospital).filter(h => h && h.trim() !== ""))
   );
 
-  // Determine source: server search results or local allPatients
-  const patientSource = searchResults ?? allPatients;
-
-  // Search filter logic (only for local allPatients when no server search)
-  const filteredPatients = useMemo(() => {
-    const source = searchResults ?? allPatients;
+  // Client-side filter + sort on server search results only
+  const sortedPatients = useMemo(() => {
+    const source = searchResults ?? [];
     const query = searchQuery.trim().toLowerCase();
     const terms = query.split(/\s+/).filter(Boolean);
 
-    return source.filter((pat) => {
-      // If server search returned results, skip client-side text filter
-      const matchesSearch = searchResults || terms.length === 0 || (() => {
-        const fieldsToSearch = [
-          `${pat.title || ""} ${pat.first_name || ""} ${pat.last_name || ""}`,
-          pat.auto_id,
-          pat.nic,
-          pat.tp,
-          pat.bht,
-          pat.clinic,
-          pat.hospital,
-          pat.ward_no,
-          pat.initials,
-        ].map((v: any) => String(v || "").toLowerCase());
-        return terms.every((term) => fieldsToSearch.some((f) => f.includes(term)));
-      })();
-
+    const filtered = source.filter((pat) => {
+      // Server already filtered by search terms, so only apply oncology/status/hospital filters
       const patientOncologyTypes = pat.oncology_types && pat.oncology_types.length > 0 ? pat.oncology_types : [pat.oncology || "Other"];
       const matchesOncology = selectedOncology === "All" || patientOncologyTypes.includes(selectedOncology);
       const matchesStatus = selectedStatus === "All" || pat.status === selectedStatus;
       const matchesHospital = selectedHospital === "All" || pat.hospital === selectedHospital;
-
-      return matchesSearch && matchesOncology && matchesStatus && matchesHospital;
+      return matchesOncology && matchesStatus && matchesHospital;
     });
-  }, [searchResults, allPatients, searchQuery, selectedOncology, selectedStatus, selectedHospital]);
 
-  // Sorting logic
-  const sortedPatients = useMemo(() => {
-    return [...filteredPatients].sort((a, b) => {
+    return filtered.sort((a, b) => {
       let comparison = 0;
       if (sortBy === "name") {
         const nameA = `${a.first_name || ""} ${a.last_name || ""}`.toLowerCase();
@@ -102,14 +74,13 @@ export default function SearchRecordsView({
         const oncB = b.oncology || "";
         comparison = oncA.localeCompare(oncB);
       } else {
-        // default: updatedAt
         const dateA = new Date(a.updatedAt).getTime();
         const dateB = new Date(b.updatedAt).getTime();
         comparison = dateA - dateB;
       }
       return sortDirection === "asc" ? comparison : -comparison;
     });
-  }, [filteredPatients, sortBy, sortDirection]);
+  }, [searchResults, searchQuery, selectedOncology, selectedStatus, selectedHospital, sortBy, sortDirection]);
 
   const handleToggleDirection = () => {
     setSortDirection(prev => prev === "asc" ? "desc" : "asc");
@@ -124,7 +95,7 @@ export default function SearchRecordsView({
     }
     setSearching(true);
     try {
-      const res = await apiFetch(`/api/patients?search=${encodeURIComponent(query)}&includeDeleted=false&limit=2000`);
+      const res = await apiFetch(`/api/patients?search=${encodeURIComponent(query)}&includeDeleted=false&limit=100`);
       if (res.ok) {
         const data = await res.json();
         setSearchResults(data);
@@ -172,18 +143,13 @@ export default function SearchRecordsView({
         <div>
           <h2 className="text-2xl font-bold text-slate-800 dark:text-theme-on-accent tracking-tight leading-tight">Patient Registries & Records</h2>
         </div>
-        <div className="flex items-center gap-2 text-xs font-semibold">
-          <span className="bg-natural-accent/10 dark:bg-natural-accent/20 text-natural-accent-dark dark:text-natural-hover py-1.5 px-3 rounded-xl border border-natural-accent/30 leading-normal">
-            Active: {activeCount ?? allPatients.length}
-          </span>
-          <span className="bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 py-1.5 px-3 rounded-xl border border-rose-200 dark:border-rose-900/50 leading-normal">
-            Deleted: {deletedCount}
-          </span>
-          <span className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 py-1.5 px-3 rounded-xl border border-slate-200 dark:border-slate-700 leading-normal">
-            Total: {(activeCount ?? allPatients.length) + deletedCount}
-          </span>
-          {searchResults && <span className="text-natural-accent italic">(server search)</span>}
-        </div>
+        {searchResults !== null && (
+          <div className="flex items-center gap-2 text-xs font-semibold">
+            <span className="bg-natural-accent/10 dark:bg-natural-accent/20 text-natural-accent-dark dark:text-natural-hover py-1.5 px-3 rounded-xl border border-natural-accent/30 leading-normal">
+              Results: {searchResults.length}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Lookup controls bar */}
@@ -413,15 +379,26 @@ export default function SearchRecordsView({
           </div>
         )})}
 
-        {sortedPatients.length === 0 && (
+        {sortedPatients.length === 0 && !searching && (
           <div className="col-span-full py-16 text-center minimal-card rounded-2xl">
             <div className="flex justify-center text-natural-border mb-3">
-              <Building className="h-12 w-12 text-natural-accent" />
+              <Search className="h-12 w-12 text-natural-accent" />
             </div>
-            <h4 className="font-bold text-slate-700 dark:text-slate-200">No Patient Records Matched</h4>
-            <p className="text-xs text-slate-655 dark:text-slate-200 mt-1 max-w-sm mx-auto">
-              Please modify your search query, choose other oncology classes, or click "Add Patient" to register a new clinical metadata dossier right now.
-            </p>
+            {searchQuery ? (
+              <>
+                <h4 className="font-bold text-slate-700 dark:text-slate-200">No Patient Records Matched</h4>
+                <p className="text-xs text-slate-655 dark:text-slate-200 mt-1 max-w-sm mx-auto">
+                  Modify search query or filters and try again.
+                </p>
+              </>
+            ) : (
+              <>
+                <h4 className="font-bold text-slate-700 dark:text-slate-200">Search Patients</h4>
+                <p className="text-xs text-slate-655 dark:text-slate-200 mt-1 max-w-sm mx-auto">
+                  Enter BHT number, clinic number, name, or NIC above and click Search.
+                </p>
+              </>
+            )}
           </div>
         )}
       </div>
