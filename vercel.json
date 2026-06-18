@@ -17,7 +17,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "/api?path=:path*"
+      "destination": "/api?path=:path*&"
     }
   ],
   "headers": [
