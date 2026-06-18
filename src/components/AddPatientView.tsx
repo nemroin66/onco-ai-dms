@@ -2846,9 +2846,13 @@ export default function AddPatientView({
                       >
                         <FileText className="h-3.5 w-3.5 text-natural-accent flex-shrink-0" />
                         <span className="truncate flex-1 font-semibold text-slate-700 dark:text-slate-305">{file.name}</span>
-                        {file.extracted && (
-                          <span className="bg-natural-accent/10 border border-natural-accent/20 text-natural-accent-dark dark:text-natural-hover text-[8px] px-1 py-0.5 rounded flex-shrink-0 leading-none">
+                        {file.extracted ? (
+                          <span className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[8px] px-1 py-0.5 rounded flex-shrink-0 leading-none">
                             AI
+                          </span>
+                        ) : (
+                          <span className="bg-violet-500/10 border border-violet-500/20 text-violet-700 dark:text-violet-300 text-[8px] px-1 py-0.5 rounded flex-shrink-0 leading-none">
+                            Direct
                           </span>
                         )}
                         {fileUrl && (

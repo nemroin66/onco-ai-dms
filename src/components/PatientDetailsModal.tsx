@@ -1328,7 +1328,18 @@ export default function PatientDetailsModal({
                               <FileText className="h-5 w-5" />
                             </div>
                             <div className="truncate text-xs flex-1">
-                              <h4 className="font-bold text-slate-855 dark:text-slate-300 truncate" title={file.name}>{file.name}</h4>
+                              <div className="flex items-center gap-1.5">
+                                <h4 className="font-bold text-slate-855 dark:text-slate-300 truncate" title={file.name}>{file.name}</h4>
+                                {file.extracted ? (
+                                  <span className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[8px] px-1 py-0.5 rounded leading-none flex-shrink-0">
+                                    AI
+                                  </span>
+                                ) : (
+                                  <span className="bg-violet-500/10 border border-violet-500/20 text-violet-700 dark:text-violet-300 text-[8px] px-1 py-0.5 rounded leading-none flex-shrink-0">
+                                    Direct
+                                  </span>
+                                )}
+                              </div>
                               <p className="text-[11.5px] text-slate-600 dark:text-slate-300 font-bold mt-0.5">Size: {(file.size / 1024).toFixed(1)} KB</p>
                               <p className="text-[9px] text-slate-655 dark:text-slate-250 font-semibold mt-0.5">Uploaded: {file.uploadDate}</p>
                             </div>
