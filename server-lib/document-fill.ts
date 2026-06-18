@@ -75,15 +75,44 @@ function stripDataUrl(value: string) {
   };
 }
 
-function extractJsonObject(text: string) {
+export function extractJsonObject(text: string) {
   const trimmed = text.trim();
-  if (trimmed.startsWith("{")) return JSON.parse(trimmed);
   const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fenced) return JSON.parse(fenced[1]);
-  const start = trimmed.indexOf("{");
-  const end = trimmed.lastIndexOf("}");
-  if (start >= 0 && end > start) return JSON.parse(trimmed.slice(start, end + 1));
+  const candidate = fenced?.[1]?.trim() || trimmed;
+  const json = findFirstJsonObject(candidate);
+  if (json) return JSON.parse(json);
   throw new Error("AI document understanding did not return a JSON object.");
+}
+
+function findFirstJsonObject(text: string) {
+  const start = text.indexOf("{");
+  if (start < 0) return "";
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = start; i < text.length; i++) {
+    const char = text[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === "\\") {
+      escaped = inString;
+      continue;
+    }
+    if (char === "\"") {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+    if (char === "{") depth += 1;
+    if (char === "}") {
+      depth -= 1;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+  return "";
 }
 
 function compactField(field: ManifestField): unknown {
@@ -512,7 +541,12 @@ export async function runDocumentFill(payload: DocumentFillPayload) {
     parts.push({ inlineData: { mimeType, data: base64 } });
   }
 
-  const text = await runGemini([{ role: "user", parts }], systemInstruction, "application/json");
+  const text = await runGemini([{ role: "user", parts }], systemInstruction, "application/json", {
+    enableDiscovery: false,
+    fallbackModels: ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"],
+    timeoutMs: 45_000,
+    perAttemptTimeoutMs: 20_000,
+  });
   const parsed = extractJsonObject(text);
   const validated = validateDocumentData(parsed, sectionKey, fileName, plainText);
   const data = validated.data;

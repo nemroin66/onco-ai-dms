@@ -1,5 +1,15 @@
 import assert from "node:assert/strict";
-import { validateDocumentData } from "../server-lib/document-fill.js";
+import { extractJsonObject, validateDocumentData } from "../server-lib/document-fill.js";
+
+assert.deepEqual(
+  extractJsonObject('{"data":{"gender":"Female"},"summary":"ok"}\n\nExtra model note after JSON.'),
+  { data: { gender: "Female" }, summary: "ok" }
+);
+
+assert.deepEqual(
+  extractJsonObject('```json\n{"data":{"notes":"brace } inside string"},"summary":"ok"}\n```\nDone'),
+  { data: { notes: "brace } inside string" }, summary: "ok" }
+);
 
 const wrapped = validateDocumentData(
   {

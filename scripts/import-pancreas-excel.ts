@@ -8,7 +8,7 @@
  *   npx tsx scripts/import-pancreas-excel.ts
  */
 
-import XLSX from "xlsx";
+import * as XLSX from "xlsx";
 import path from "path";
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";

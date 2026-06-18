@@ -13,7 +13,7 @@
  *   FIREBASE_SERVICE_ACCOUNT_JSON='{...}' npx tsx scripts/import-all-cancer-registry.ts
  */
 
-import XLSX from "xlsx";
+import * as XLSX from "xlsx";
 import path from "path";
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
@@ -56,10 +56,6 @@ const COMMON_MAP: Record<
   bht: { field: "bht" },
   "clinic file no": { field: "clinic" },
   "clinic no": { field: "clinic" },
-  "clinic file no": { field: "clinic" },
-  "clinic file no": { field: "clinic" },
-  "clinic file no": { field: "clinic" },
-  "clinic file no": { field: "clinic" },
   "contact no": { field: "tp" },
   "contact number": { field: "tp" },
   "tp no": { field: "tp" },

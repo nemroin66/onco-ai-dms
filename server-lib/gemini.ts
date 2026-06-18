@@ -54,6 +54,13 @@ const FALLBACK_MODELS = [
   "gemini-1.0-pro",
 ];
 
+interface RunGeminiOptions {
+  enableDiscovery?: boolean;
+  fallbackModels?: string[];
+  perAttemptTimeoutMs?: number;
+  timeoutMs?: number;
+}
+
 function buildConfig(apiVersion: string, systemInstruction?: string, responseMimeType?: string) {
   const config: Record<string, any> = {};
   if (apiVersion === "v1beta") {
@@ -63,7 +70,38 @@ function buildConfig(apiVersion: string, systemInstruction?: string, responseMim
   return config;
 }
 
-export async function runGemini(contents: any, systemInstruction?: string, responseMimeType?: string) {
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  return Promise.race([
+    promise.finally(() => clearTimeout(timer)),
+    new Promise<T>((_, reject) => {
+      timer = setTimeout(() => {
+        const error = new Error(`${label} timed out.`);
+        (error as Error & { status?: number }).status = 504;
+        reject(error);
+      }, timeoutMs);
+    }),
+  ]);
+}
+
+function remainingMs(deadline: number) {
+  return Math.max(0, deadline - Date.now());
+}
+
+function assertWithinDeadline(deadline: number) {
+  if (remainingMs(deadline) <= 1_000) {
+    const error = new Error("AI request timed out before a usable Gemini response was returned.");
+    (error as Error & { status?: number }).status = 504;
+    throw error;
+  }
+}
+
+export async function runGemini(
+  contents: any,
+  systemInstruction?: string,
+  responseMimeType?: string,
+  options: RunGeminiOptions = {}
+) {
   const {
     primaryGeminiKey,
     secondaryGeminiKey,
@@ -81,59 +119,71 @@ export async function runGemini(contents: any, systemInstruction?: string, respo
 
   const apiVersions = ["v1beta", "v1"];
   let lastError: any;
+  const deadline = Date.now() + (options.timeoutMs || 55_000);
+  const perAttemptTimeoutMs = options.perAttemptTimeoutMs || 25_000;
+
+  const generate = async (apiKey: string, apiVersion: string, model: string) => {
+    assertWithinDeadline(deadline);
+    const ai = new GoogleGenAI({ apiKey, apiVersion });
+    const availableMs = Math.min(perAttemptTimeoutMs, remainingMs(deadline) - 500);
+    return withTimeout(
+      ai.models.generateContent({
+        model: model.replace(/^models\//, ""),
+        contents,
+        config: buildConfig(apiVersion, systemInstruction, responseMimeType),
+      }),
+      Math.max(1_000, availableMs),
+      `Gemini ${model}`
+    );
+  };
 
   // Phase 1: Try each configured model with v1beta then v1
   for (const attempt of attempts) {
     for (const apiVersion of apiVersions) {
       try {
-        const ai = new GoogleGenAI({ apiKey: attempt.key, apiVersion });
-        const modelName = attempt.model.replace(/^models\//, "");
-        const response = await ai.models.generateContent({
-          model: modelName,
-          contents,
-          config: buildConfig(apiVersion, systemInstruction, responseMimeType),
-        });
+        const response = await generate(attempt.key, apiVersion, attempt.model);
         return response.text || "";
       } catch (error: any) {
         lastError = error;
+        if (error?.status === 504) throw error;
       }
     }
   }
 
   // Phase 2: Discover models via REST API and try each
-  for (const attempt of attempts) {
-    for (const apiVersion of apiVersions) {
-      const discovered = await discoverModelsViaRest(attempt.key, apiVersion);
-      for (const model of discovered) {
-        try {
-          const ai = new GoogleGenAI({ apiKey: attempt.key, apiVersion });
-          const response = await ai.models.generateContent({
-            model,
-            contents,
-            config: buildConfig(apiVersion, systemInstruction, responseMimeType),
-          });
-          return response.text || "";
-        } catch (error: any) {
-          lastError = error;
+  if (options.enableDiscovery !== false) {
+    for (const attempt of attempts) {
+      for (const apiVersion of apiVersions) {
+        assertWithinDeadline(deadline);
+        const discovered = await withTimeout(
+          discoverModelsViaRest(attempt.key, apiVersion),
+          Math.min(5_000, Math.max(1_000, remainingMs(deadline) - 500)),
+          "Gemini model discovery"
+        );
+        for (const model of discovered) {
+          try {
+            const response = await generate(attempt.key, apiVersion, model);
+            return response.text || "";
+          } catch (error: any) {
+            lastError = error;
+            if (error?.status === 504) throw error;
+          }
         }
       }
     }
   }
 
   // Phase 3: Hardcoded comprehensive fallback list
+  const fallbackModels = options.fallbackModels || FALLBACK_MODELS;
   for (const attempt of attempts) {
     for (const apiVersion of apiVersions) {
-      for (const model of FALLBACK_MODELS) {
+      for (const model of fallbackModels) {
         try {
-          const ai = new GoogleGenAI({ apiKey: attempt.key, apiVersion });
-          const response = await ai.models.generateContent({
-            model,
-            contents,
-            config: buildConfig(apiVersion, systemInstruction, responseMimeType),
-          });
+          const response = await generate(attempt.key, apiVersion, model);
           return response.text || "";
         } catch (error: any) {
           lastError = error;
+          if (error?.status === 504) throw error;
         }
       }
     }

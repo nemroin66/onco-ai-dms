@@ -1,4 +1,5 @@
 process.env.NODE_NO_DEPRECATION = "1";
+process.noDeprecation = true;
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import chat from "../server-lib/handlers/chat.js";
 import extract from "../server-lib/handlers/extract.js";
