@@ -45,6 +45,7 @@ app.use(helmet({
       defaultSrc: ["'self'"],
       scriptSrc: [
         "'self'",
+        "'unsafe-eval'",
         "https://apis.google.com",
         "https://*.firebaseio.com",
         "https://identitytoolkit.googleapis.com",
