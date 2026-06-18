@@ -63,10 +63,10 @@ export const confirmDialog = (
 };
 
 const toastIcon: Record<DialogVariant, React.ReactNode> = {
-  info: <Info className="h-3.5 w-3.5" />,
-  success: <CheckCircle className="h-3.5 w-3.5" />,
-  warning: <AlertTriangle className="h-3.5 w-3.5" />,
-  danger: <AlertTriangle className="h-3.5 w-3.5" />,
+  info: <Info className="h-4 w-4" />,
+  success: <CheckCircle className="h-4 w-4" />,
+  warning: <AlertTriangle className="h-4 w-4" />,
+  danger: <AlertTriangle className="h-4 w-4" />,
 };
 
 const toastBg: Record<DialogVariant, string> = {
@@ -148,19 +148,19 @@ export function AppDialogProvider({ children }: { children: React.ReactNode }) {
     <>
       {children}
 
-      {/* Toast stack — top-right, compact */}
+      {/* Toast stack — top-right */}
       <div className="fixed top-3 right-3 z-[100] flex flex-col gap-1.5 pointer-events-none">
         {toasts.map((t) => (
           <div
             key={t.id}
-            className={`pointer-events-auto flex items-start gap-2 px-2.5 py-2 rounded-lg border shadow-md min-w-[200px] max-w-[320px] ${toastBg[t.variant]} ${
+            className={`pointer-events-auto flex items-start gap-2.5 px-3 py-2.5 rounded-lg border shadow-md min-w-[220px] max-w-[350px] ${toastBg[t.variant]} ${
               t.leaving ? "opacity-0 translate-x-4" : "opacity-100 translate-x-0"
             } transition-all duration-200`}
           >
             <span className="mt-0.5 flex-shrink-0">{toastIcon[t.variant]}</span>
             <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-bold leading-tight truncate">{t.title}</p>
-              <p className="text-[10px] leading-tight mt-0.5 opacity-80 line-clamp-2">{t.message}</p>
+              <p className="text-[12px] font-bold leading-tight truncate">{t.title}</p>
+              <p className="text-[11px] leading-tight mt-0.5 opacity-80 line-clamp-2">{t.message}</p>
             </div>
             <button
               type="button"
@@ -168,7 +168,7 @@ export function AppDialogProvider({ children }: { children: React.ReactNode }) {
               className="p-0.5 rounded flex-shrink-0 opacity-60 hover:opacity-100 transition-opacity"
               aria-label="Dismiss"
             >
-              <X className="h-3 w-3" />
+              <X className="h-3.5 w-3.5" />
             </button>
           </div>
         ))}
