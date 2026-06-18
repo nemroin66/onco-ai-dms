@@ -1,7 +1,39 @@
 import React, { useMemo, useRef } from "react";
-import ReactECharts from "echarts-for-react";
+import * as echarts from "echarts/core";
+import {
+  BarChart,
+  BoxplotChart,
+  FunnelChart,
+  HeatmapChart,
+  LineChart,
+  PieChart,
+  ScatterChart,
+} from "echarts/charts";
+import {
+  GridComponent,
+  LegendComponent,
+  TooltipComponent,
+  VisualMapComponent,
+} from "echarts/components";
+import { CanvasRenderer } from "echarts/renderers";
+import ReactEChartsCore from "echarts-for-react/lib/core";
 import { AlertTriangle, Download, GripHorizontal, Trash2 } from "lucide-react";
 import type { AnalyticsResult } from "../analytics/types";
+
+echarts.use([
+  BarChart,
+  BoxplotChart,
+  FunnelChart,
+  HeatmapChart,
+  LineChart,
+  PieChart,
+  ScatterChart,
+  GridComponent,
+  LegendComponent,
+  TooltipComponent,
+  VisualMapComponent,
+  CanvasRenderer,
+]);
 
 interface AnalyticsChartProps {
   result?: AnalyticsResult;
@@ -179,7 +211,7 @@ function chartOption(result: AnalyticsResult) {
 }
 
 export default function AnalyticsChart({ result, loading, onRemove }: AnalyticsChartProps) {
-  const chartRef = useRef<ReactECharts>(null);
+  const chartRef = useRef<ReactEChartsCore>(null);
   const option = useMemo(() => result ? chartOption(result) : {}, [result]);
 
   const exportPng = () => {
@@ -255,7 +287,7 @@ export default function AnalyticsChart({ result, loading, onRemove }: AnalyticsC
           </div>
         )}
         {!loading && result && !["kpi", "table"].includes(result.spec.chartType) && (
-          <ReactECharts ref={chartRef} option={option} style={{ height: "100%", minHeight: 220 }} notMerge lazyUpdate />
+          <ReactEChartsCore ref={chartRef} echarts={echarts} option={option} style={{ height: "100%", minHeight: 220 }} notMerge lazyUpdate />
         )}
       </div>
 
