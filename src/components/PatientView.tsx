@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import type { PatientRecord, DefinitiveSurgeryEntry, TreatmentOutcomeEntry, AfterSurgicalTherapyEntry, AdjuvantTherapyEntry, FollowUpPrognosisEntry, OncologicalOutcomeEntry, IntraopImagingEntry, PostOpComplicationEntry, TumorCharacteristicsEntry, PreOperativeAssessmentEntry, ClinicalStagingEntry, HistologyGradingEntry } from "../types";
 import { ChatMarkdown, ThinkingDots } from "./ChatMarkdown";
-import { getExportKeyOrder } from "../formManifest";
+import MANIFEST, { getExportKeyOrder } from "../formManifest";
 import { apiFetch } from "../lib/api-client";
 
 const D = ({ v }: { v: string | number | undefined | null }) => (
@@ -24,6 +24,7 @@ const DL = ({ label, value, fullWidth = false }: { label: string; value: string 
 );
 
 const sectionIconColors: Record<string, string> = {
+  summary: "#10B981",
   patientIdentifiers: "#3B82F6", demographics: "#6B7280", oncology: "#8B5CF6",
   hospital: "#14B8A6", history: "#6366F1", clinicalAssessment: "#6366F1",
   anthropometric: "#14B8A6", examination: "#14B8A6", provisionalDiagnosis: "#F59E0B",
@@ -94,6 +95,114 @@ const TD = ({ v }: { v: string | number | undefined | null }) => (
   </td>
 );
 
+type SummaryItem = {
+  section: string;
+  label: string;
+  value: string;
+};
+
+const SUMMARY_SKIP_KEYS = new Set(["id", "createdAt", "updatedAt", "isDeleted"]);
+const DEFAULT_ONLY_KEY_PATTERN = /(^id$|_id$|_unit$|_parameter$)/i;
+
+const humanizeKey = (key: string) => (
+  key
+    .replace(/Table$/, "")
+    .replace(/_/g, " ")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase())
+);
+
+const hasFilledValue = (value: any): boolean => {
+  if (value === undefined || value === null) return false;
+  if (typeof value === "string") return value.trim().length > 0;
+  if (typeof value === "number") return Number.isFinite(value);
+  if (typeof value === "boolean") return value === true;
+  if (Array.isArray(value)) return value.some((item) => hasFilledValue(item));
+  if (typeof value === "object") {
+    return Object.entries(value).some(([childKey, childValue]) => {
+      if (DEFAULT_ONLY_KEY_PATTERN.test(childKey) && !hasFilledValue(childValue)) return false;
+      if (DEFAULT_ONLY_KEY_PATTERN.test(childKey)) return false;
+      return hasFilledValue(childValue);
+    });
+  }
+  return Boolean(value);
+};
+
+const formatSummaryValue = (value: any): string => {
+  if (value === undefined || value === null) return "";
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number") return String(value);
+  if (typeof value === "boolean") return value ? "Yes" : "";
+  if (Array.isArray(value)) {
+    return value
+      .filter((item) => hasFilledValue(item))
+      .map((item, index) => {
+        const formatted = formatSummaryValue(item);
+        return typeof item === "object" && item !== null ? `${index + 1}. ${formatted}` : formatted;
+      })
+      .filter(Boolean)
+      .join(" | ");
+  }
+  if (typeof value === "object") {
+    return Object.entries(value)
+      .filter(([, childValue]) => hasFilledValue(childValue))
+      .map(([childKey, childValue]) => `${humanizeKey(childKey)}: ${formatSummaryValue(childValue)}`)
+      .filter(Boolean)
+      .join("; ");
+  }
+  return String(value);
+};
+
+const buildPatientSummary = (record: PatientRecord): SummaryItem[] => {
+  const items: SummaryItem[] = [];
+  const consumedKeys = new Set<string>();
+
+  const addSummaryField = (section: string, key: string, value: any) => {
+    consumedKeys.add(key);
+    if (SUMMARY_SKIP_KEYS.has(key) || !hasFilledValue(value)) return;
+
+    if (Array.isArray(value)) {
+      value.forEach((row, index) => {
+        if (!hasFilledValue(row)) return;
+        const formatted = formatSummaryValue(row);
+        if (formatted) {
+          items.push({
+            section,
+            label: `${humanizeKey(key)} #${index + 1}`,
+            value: formatted,
+          });
+        }
+      });
+      return;
+    }
+
+    const formatted = formatSummaryValue(value);
+    if (formatted) {
+      items.push({
+        section,
+        label: humanizeKey(key),
+        value: formatted,
+      });
+    }
+  };
+
+  Object.values(MANIFEST.sections).forEach((section) => {
+    Object.keys(section.fields).forEach((key) => {
+      addSummaryField(section.label, key, (record as any)[key]);
+    });
+  });
+
+  Object.entries(record).forEach(([key, value]) => {
+    if (!consumedKeys.has(key)) {
+      addSummaryField("Additional Details", key, value);
+    }
+  });
+
+  return items;
+};
+
 interface PatientViewProps {
   patient: PatientRecord;
   onEdit: (patient: PatientRecord) => void;
@@ -107,6 +216,7 @@ export default function PatientView({ patient, onEdit, onDelete, onClose }: Pati
   const [deleteProgress, setDeleteProgress] = useState(0);
   const [deleteStage, setDeleteStage] = useState("");
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    summary: true,
     patientIdentifiers: true,
     demographics: true,
     oncology: true,
@@ -206,6 +316,7 @@ export default function PatientView({ patient, onEdit, onDelete, onClose }: Pati
   };
 
   const p = patient;
+  const summaryItems = React.useMemo(() => buildPatientSummary(p), [p]);
 
   const handleExportJSON = () => {
     const keyOrder = getExportKeyOrder();
@@ -329,6 +440,25 @@ export default function PatientView({ patient, onEdit, onDelete, onClose }: Pati
 
       {activeTab === "dossier" ? (
         <div className="space-y-4">
+          <Section title="Summary" icon={ScrollText} sectionKey="summary" openSections={openSections} onToggle={toggleSection}>
+            {summaryItems.length > 0 ? (
+              <ul className="md:col-span-4 grid grid-cols-1 lg:grid-cols-2 gap-2">
+                {summaryItems.map((item, index) => (
+                  <li key={`${item.section}-${item.label}-${index}`} className="flex gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-3 text-slate-700 dark:text-slate-300">
+                    <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-emerald-500 flex-shrink-0" />
+                    <div className="min-w-0 leading-relaxed">
+                      <div className="text-[10px] uppercase tracking-wider font-bold text-emerald-700 dark:text-emerald-300">{item.section}</div>
+                      <span className="font-semibold text-slate-800 dark:text-slate-100">{item.label}: </span>
+                      <span className="break-words">{item.value}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="md:col-span-4 text-center py-4 text-slate-400 italic">No filled data recorded.</div>
+            )}
+          </Section>
+
           <Section title="Patient Identifiers" icon={IdCard} sectionKey="patientIdentifiers" openSections={openSections} onToggle={toggleSection}>
             <DL label="Auto ID" value={p.auto_id} />
             <DL label="Title" value={p.title} />
