@@ -727,13 +727,18 @@ app.get("/api/patients", async (req, res) => {
 
     if (isSearch) {
       const terms = searchQuery.split(/\s+/).filter(Boolean);
-      filteredPatients = filteredPatients.filter((p: any) => {
-        const fieldsToSearch = [
-          `${p.title || ""} ${p.first_name || ""} ${p.last_name || ""}`,
-          p.auto_id, p.nic, p.tp, p.bht, p.clinic, p.hospital, p.ward_no, p.initials,
-        ].map((v: any) => String(v || "").toLowerCase());
-        return terms.every((term: string) => fieldsToSearch.some((f: string) => f.includes(term)));
+      const scored = filteredPatients.map((p: any) => {
+        const textBlob = [
+          p.title, p.first_name, p.last_name, p.initials,
+          p.auto_id, p.nic, p.tp, p.bht, p.clinic, p.hospital, p.ward_no,
+        ].filter(Boolean).map((v: any) => String(v).toLowerCase()).join(" ");
+        const score = terms.filter((t: string) => textBlob.includes(t)).length;
+        return { patient: p, score };
       });
+      filteredPatients = scored.filter((s: any) => s.score > 0)
+        .sort((a: any, b: any) => b.score - a.score)
+        .map((s: any) => s.patient)
+        .slice(0, limit);
     } else {
       filteredPatients.sort((a: any, b: any) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
       filteredPatients = filteredPatients.slice(0, limit);

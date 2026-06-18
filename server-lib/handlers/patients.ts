@@ -32,13 +32,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       if (isSearch) {
         const terms = searchQuery.split(/\s+/).filter(Boolean);
-        patients = patients.filter((p: any) => {
-          const fieldsToSearch = [
-            `${p.title || ""} ${p.first_name || ""} ${p.last_name || ""}`,
-            p.auto_id, p.nic, p.tp, p.bht, p.clinic, p.hospital, p.ward_no, p.initials,
-          ].map((v: any) => String(v || "").toLowerCase());
-          return terms.every((term: string) => fieldsToSearch.some((f: string) => f.includes(term)));
+        const scored = patients.map((p: any) => {
+          const textBlob = [
+            p.title, p.first_name, p.last_name, p.initials,
+            p.auto_id, p.nic, p.tp, p.bht, p.clinic, p.hospital, p.ward_no,
+          ].filter(Boolean).map((v: any) => String(v).toLowerCase()).join(" ");
+          const score = terms.filter((t: string) => textBlob.includes(t)).length;
+          return { patient: p, score };
         });
+        patients = scored.filter((s: any) => s.score > 0)
+          .sort((a: any, b: any) => b.score - a.score)
+          .map((s: any) => s.patient)
+          .slice(0, limit);
       } else {
         patients.sort((a: any, b: any) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
         patients = patients.slice(0, limit);
