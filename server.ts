@@ -512,6 +512,15 @@ const FALLBACK_MODELS = [
   "gemini-1.0-pro",
 ];
 
+function buildConfig(apiVersion: string, systemInstruction?: string, responseMimeType?: string) {
+  const config: Record<string, any> = {};
+  if (apiVersion === "v1beta") {
+    if (systemInstruction) config.systemInstruction = systemInstruction;
+    if (responseMimeType) config.responseMimeType = responseMimeType;
+  }
+  return config;
+}
+
 async function runGemini(contents: any, systemInstruction?: string, responseMimeType?: string) {
   const attempts = [
     { key: primaryGeminiKey, model: primaryGeminiModel },
@@ -534,7 +543,7 @@ async function runGemini(contents: any, systemInstruction?: string, responseMime
         const response = await ai.models.generateContent({
           model: modelName,
           contents,
-          config: { systemInstruction, responseMimeType },
+          config: buildConfig(apiVersion, systemInstruction, responseMimeType),
         });
         return response.text || "";
       } catch (error: any) {
@@ -553,7 +562,7 @@ async function runGemini(contents: any, systemInstruction?: string, responseMime
           const response = await ai.models.generateContent({
             model,
             contents,
-            config: { systemInstruction, responseMimeType },
+            config: buildConfig(apiVersion, systemInstruction, responseMimeType),
           });
           return response.text || "";
         } catch (error: any) {
@@ -572,7 +581,7 @@ async function runGemini(contents: any, systemInstruction?: string, responseMime
           const response = await ai.models.generateContent({
             model,
             contents,
-            config: { systemInstruction, responseMimeType },
+            config: buildConfig(apiVersion, systemInstruction, responseMimeType),
           });
           return response.text || "";
         } catch (error: any) {
