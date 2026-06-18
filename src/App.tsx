@@ -55,15 +55,6 @@ function AppContent() {
     return () => unsub();
   }, []);
 
-   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
-    const stored = localStorage.getItem("onc_sidebar_collapsed");
-    return stored ? stored === "true" : true; // default collapsed on desktop
-  });
-
-  useEffect(() => {
-    localStorage.setItem("onc_sidebar_collapsed", String(sidebarCollapsed));
-  }, [sidebarCollapsed]);
-
    const [activeMenu, setActiveMenu] = useState<MenuType>("Home");
    const [allPatients, setAllPatients] = useState<PatientRecord[]>([]);
    const [deletedPatients, setDeletedPatients] = useState<PatientRecord[]>([]);
@@ -456,8 +447,6 @@ function AppContent() {
 
       {/* Sidebar Navigation */}
       <Sidebar
-        collapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         activeMenu={activeMenu}
         onChangeMenu={async (menu) => {
           // Warn before leaving unsaved form
@@ -476,7 +465,7 @@ function AppContent() {
       />
 
       {/* Main clinical viewport box */}
-      <main className={`flex-1 overflow-y-auto px-4 py-6 md:p-8 ${sidebarCollapsed ? "lg:ml-[72px]" : "lg:ml-[260px]"}`}>
+      <main className="flex-1 overflow-y-auto px-4 py-6 md:p-8">
         <div className="max-w-7xl mx-auto space-y-6">
           {renderActiveView()}
         </div>
