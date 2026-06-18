@@ -507,7 +507,10 @@ export default function AddPatientView({
 
   // Confirm before leaving with unsaved changes
   const handleNavigateHome = React.useCallback(async () => {
-    if (isDirtyRef.current) {
+    const lastNameEl = lastNameRef.current ?? document.querySelector<HTMLInputElement>('input[name="last_name"]');
+    const hasLastName = lastNameEl?.value?.trim() ? true : false;
+    const isNewEmpty = !initialPatientData && !hasLastName;
+    if (isDirtyRef.current && !isNewEmpty) {
       const leave = await confirmDialog("You have unsaved changes. Are you sure you want to leave without saving?", "Unsaved Changes", "warning", "Leave", "Stay");
       if (!leave) return;
     }
@@ -2379,6 +2382,14 @@ export default function AddPatientView({
       return;
     }
 
+    // Validate required fields
+    const initialsFromDOM = (document.querySelector<HTMLInputElement>('input[name="initials"]')?.value ?? "").trim();
+    if (!initialsFromDOM) {
+      await notify("Initials are required.", "Validation Error", "warning");
+      setIsSaving(false);
+      return;
+    }
+
     // Read values directly from DOM — avoids stale React closure bugs
     const firstNameFromDOM = firstNameRef.current?.value ?? (document.querySelector<HTMLInputElement>('input[name="first_name"]')?.value ?? "");
     const lastNameFromDOM = lastNameRef.current?.value ?? (document.querySelector<HTMLInputElement>('input[name="last_name"]')?.value ?? "");
@@ -3020,7 +3031,7 @@ export default function AddPatientView({
               </div>
 
               <div>
-                <label className="block font-semibold mb-1 dark:text-slate-400">Initials</label>
+                <label className="block font-bold mb-1 text-slate-800 dark:text-slate-300">Initials *</label>
                 <input
                   type="text"
                   name="initials"
