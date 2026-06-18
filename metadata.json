@@ -1,0 +1,6 @@
+{
+  "name": "Oncology Patient Data Manager",
+  "description": "A single-user patient data store with automated oncology data extraction, AI-powered health guidelines Q&A, and virtual Google Drive folder structure for medical records.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

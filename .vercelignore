@@ -1,0 +1,14 @@
+node_modules
+dist
+.next
+.vite
+.git
+.DS_Store
+server.ts
+server.log
+*.zip
+*.log
+.env
+.env.*
+!.env.example
+!.env.vercel.example

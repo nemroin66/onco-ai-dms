@@ -1,0 +1,64 @@
+import type { VercelRequest, VercelResponse } from "@vercel/node";
+import chat from "../server-lib/handlers/chat.js";
+import extract from "../server-lib/handlers/extract.js";
+import files from "../server-lib/handlers/files.js";
+import health from "../server-lib/handlers/health.js";
+import patients from "../server-lib/handlers/patients.js";
+import patient from "../server-lib/handlers/patients/id/index.js";
+import permanent from "../server-lib/handlers/patients/id/permanent.js";
+import restore from "../server-lib/handlers/patients/id/restore.js";
+import trash from "../server-lib/handlers/patients/trash.js";
+import count from "../server-lib/handlers/patients/count.js";
+import storage from "../server-lib/handlers/storage.js";
+import quota from "../server-lib/handlers/quota.js";
+import wipe from "../server-lib/handlers/wipe.js";
+import analytics from "../server-lib/handlers/analytics.js";
+import auditLogs from "../server-lib/handlers/audit-logs.js";
+import { requireAdmin, vercelAuth } from "../server-lib/auth.js";
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const rawPath = req.query.path;
+  const parts = (Array.isArray(rawPath) ? rawPath : String(rawPath || "").split("/")).filter(Boolean);
+  const route = parts.join("/");
+
+  if (route === "health") return health(req, res);
+  const user = await vercelAuth(req, res);
+  if (!user) return;
+
+  if (
+    route === "wipe"
+    || (route === "patients/trash" && req.method === "POST")
+    || (parts[0] === "patients" && parts[2] === "permanent")
+  ) {
+    try {
+      requireAdmin(user);
+    } catch (error: any) {
+      console.error("[admin] Access denied:", error?.message || error);
+      return res.status(error?.status || 403).json({ error: "Administrator access required." });
+    }
+  }
+
+  if (parts[0] === "analytics") {
+    req.query.analyticsPath = parts.slice(1).join("/");
+    return analytics(req, res);
+  }
+  if (route === "audit-logs") return auditLogs(req, res);
+  if (route === "quota") return quota(req, res);
+  if (route === "chat") return chat(req, res);
+  if (route === "extract" || route === "document-fill") return extract(req, res);
+  if (route === "files") return files(req, res);
+  if (route === "wipe") return wipe(req, res);
+  if (route === "patients") return patients(req, res);
+  if (route === "patients/trash") return trash(req, res);
+  if (route === "patients/count") return count(req, res);
+  if (route === "storage") return storage(req, res);
+
+  if (parts[0] === "patients" && parts[1]) {
+    req.query.id = parts[1];
+    if (parts.length === 2) return patient(req, res);
+    if (parts.length === 3 && parts[2] === "restore") return restore(req, res);
+    if (parts.length === 3 && parts[2] === "permanent") return permanent(req, res);
+  }
+
+  return res.status(404).json({ error: "API route not found." });
+}
