@@ -48,7 +48,7 @@ export default function Sidebar({ activeMenu, onChangeMenu, currentUser, onSignO
   return (
     <>
       {/* Top bar — visible on all screen sizes */}
-      <div className="flex items-center gap-2 minimal-header px-4 py-3 sticky top-0 z-30 transition-colors duration-200">
+      <div className="flex items-center gap-2 minimal-header px-4 py-3 w-full z-30 transition-colors duration-200">
         <button
           id="btn-mobile-menu"
           onClick={() => setMenuOpen(!menuOpen)}

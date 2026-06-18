@@ -431,7 +431,7 @@ function AppContent() {
   };
 
   return (
-    <div className="min-h-screen max-w-full overflow-x-hidden bg-natural-bg text-natural-accent-dark transition-colors duration-200 flex flex-col lg:flex-row antialiased relative">
+    <div className="min-h-screen max-w-full overflow-x-hidden bg-natural-bg text-natural-accent-dark transition-colors duration-200 flex flex-col antialiased relative">
       {showIntro && (
         <HeroIntro
           appName="Oncology Data Manager"
