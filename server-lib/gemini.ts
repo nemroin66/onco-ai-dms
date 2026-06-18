@@ -4,9 +4,24 @@ function geminiConfig() {
   return {
     primaryGeminiKey: process.env.GEMINI_API_KEY_PRIMARY || process.env.GEMINI_API_KEY || "",
     secondaryGeminiKey: process.env.GEMINI_API_KEY_SECONDARY || "",
-    primaryGeminiModel: process.env.GEMINI_MODEL_PRIMARY || "gemini-2.5-flash-lite",
-    secondaryGeminiModel: process.env.GEMINI_MODEL_SECONDARY || "gemini-2.5-flash-lite",
+    pooledGeminiKeys: process.env.GEMINI_API_KEYS || "",
+    primaryGeminiModel: process.env.GEMINI_MODEL_PRIMARY || "gemini-3.1-flash-lite",
+    secondaryGeminiModel: process.env.GEMINI_MODEL_SECONDARY || "gemini-3.1-flash-lite",
   };
+}
+
+function configuredKeys(primaryGeminiKey: string, secondaryGeminiKey: string, pooledGeminiKeys: string) {
+  const rawKeys = [
+    primaryGeminiKey,
+    secondaryGeminiKey,
+    ...pooledGeminiKeys.split(","),
+  ].map((key) => key.trim()).filter(Boolean);
+  const seen = new Set<string>();
+  return rawKeys.filter((key) => {
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 async function discoverModelsViaRest(apiKey: string, apiVersion: string): Promise<string[]> {
@@ -140,29 +155,33 @@ export async function runGemini(
   const {
     primaryGeminiKey,
     secondaryGeminiKey,
+    pooledGeminiKeys,
     primaryGeminiModel,
     secondaryGeminiModel,
   } = geminiConfig();
-  const attempts = [
-    { key: primaryGeminiKey, model: primaryGeminiModel },
-    { key: secondaryGeminiKey, model: secondaryGeminiModel },
-  ].filter((x) => x.key);
+  const keys = configuredKeys(primaryGeminiKey, secondaryGeminiKey, pooledGeminiKeys);
+  const attempts = keys.map((key, index) => ({
+    key,
+    keyLabel: `key-${index + 1}`,
+    model: index === 0 ? primaryGeminiModel : secondaryGeminiModel,
+  }));
 
   if (attempts.length === 0) {
     throw new Error("No Gemini API keys configured.");
   }
 
   const apiVersions = options.apiVersions?.length ? options.apiVersions : ["v1beta", "v1"];
+  const models = options.models?.length
+    ? Array.from(new Set(options.models))
+    : Array.from(new Set(attempts.map((attempt) => attempt.model).filter(Boolean)));
   const configuredAttempts = options.models?.length
-    ? attempts.flatMap((attempt) =>
-        Array.from(new Set(options.models)).map((model) => ({ key: attempt.key, model }))
-      )
+    ? models.flatMap((model) => attempts.map((attempt) => ({ ...attempt, model })))
     : attempts;
   let lastError: any;
   const deadline = Date.now() + (options.timeoutMs || 55_000);
   const perAttemptTimeoutMs = options.perAttemptTimeoutMs || 25_000;
 
-  const generate = async (apiKey: string, apiVersion: string, model: string) => {
+  const generate = async (apiKey: string, apiVersion: string, model: string, keyLabel: string) => {
     assertWithinDeadline(deadline);
     const ai = new GoogleGenAI({ apiKey, apiVersion });
     const availableMs = Math.min(perAttemptTimeoutMs, remainingMs(deadline) - 500);
@@ -173,7 +192,7 @@ export async function runGemini(
         config: buildConfig(apiVersion, systemInstruction, responseMimeType),
       }),
       Math.max(1_000, availableMs),
-      `Gemini ${model}`
+      `Gemini ${model} on ${keyLabel}`
     );
   };
 
@@ -181,10 +200,11 @@ export async function runGemini(
   for (const attempt of configuredAttempts) {
     for (const apiVersion of apiVersions) {
       try {
-        const response = await generate(attempt.key, apiVersion, attempt.model);
+        const response = await generate(attempt.key, apiVersion, attempt.model, attempt.keyLabel);
         return response.text || "";
       } catch (error: any) {
         lastError = normalizeGeminiError(error);
+        console.warn(`[gemini] ${attempt.keyLabel} ${apiVersion}/${attempt.model} failed:`, lastError?.code || lastError?.message || lastError);
         if (error?.code === "DEADLINE_TIMEOUT") throw error;
       }
     }
@@ -202,10 +222,11 @@ export async function runGemini(
         );
         for (const model of discovered) {
           try {
-            const response = await generate(attempt.key, apiVersion, model);
+            const response = await generate(attempt.key, apiVersion, model, attempt.keyLabel);
             return response.text || "";
           } catch (error: any) {
             lastError = normalizeGeminiError(error);
+            console.warn(`[gemini] ${attempt.keyLabel} ${apiVersion}/${model} failed:`, lastError?.code || lastError?.message || lastError);
             if (error?.code === "DEADLINE_TIMEOUT") throw error;
           }
         }
@@ -219,10 +240,11 @@ export async function runGemini(
     for (const apiVersion of apiVersions) {
       for (const model of fallbackModels) {
         try {
-          const response = await generate(attempt.key, apiVersion, model);
+          const response = await generate(attempt.key, apiVersion, model, attempt.keyLabel);
           return response.text || "";
         } catch (error: any) {
           lastError = normalizeGeminiError(error);
+          console.warn(`[gemini] ${attempt.keyLabel} ${apiVersion}/${model} failed:`, lastError?.code || lastError?.message || lastError);
           if (error?.code === "DEADLINE_TIMEOUT") throw error;
         }
       }

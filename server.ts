@@ -108,8 +108,8 @@ const firebaseProjectId = env("FIREBASE_WEB_PROJECT_ID", "VITE_FIREBASE_PROJECT_
 const driveFolderId = env("DRIVE_FOLDER_ID", "GOOGLE_DRIVE_FOLDER_ID", "VITE_DRIVE_ROOT_FOLDER_ID");
 const primaryGeminiKey = env("GEMINI_API_KEY_PRIMARY", "GEMINI_API_KEY");
 const secondaryGeminiKey = env("GEMINI_API_KEY_SECONDARY");
-const primaryGeminiModel = env("GEMINI_MODEL_PRIMARY") || "gemini-2.5-flash-lite";
-const secondaryGeminiModel = env("GEMINI_MODEL_SECONDARY") || "gemini-2.5-flash-lite";
+const primaryGeminiModel = env("GEMINI_MODEL_PRIMARY") || "gemini-3.1-flash-lite";
+const secondaryGeminiModel = env("GEMINI_MODEL_SECONDARY") || "gemini-3.1-flash-lite";
 
 function parseServiceAccount(raw: string) {
   const readFromLocalEnvNew = () => {
