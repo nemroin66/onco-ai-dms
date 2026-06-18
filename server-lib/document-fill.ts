@@ -542,10 +542,12 @@ export async function runDocumentFill(payload: DocumentFillPayload) {
   }
 
   const text = await runGemini([{ role: "user", parts }], systemInstruction, "application/json", {
+    models: ["gemini-2.5-flash-lite", "gemini-2.0-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash"],
+    apiVersions: ["v1beta"],
     enableDiscovery: false,
-    fallbackModels: ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"],
-    timeoutMs: 45_000,
-    perAttemptTimeoutMs: 20_000,
+    fallbackModels: [],
+    timeoutMs: 52_000,
+    perAttemptTimeoutMs: 14_000,
   });
   const parsed = extractJsonObject(text);
   const validated = validateDocumentData(parsed, sectionKey, fileName, plainText);

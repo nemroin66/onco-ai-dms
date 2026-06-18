@@ -57,6 +57,8 @@ const FALLBACK_MODELS = [
 interface RunGeminiOptions {
   enableDiscovery?: boolean;
   fallbackModels?: string[];
+  models?: string[];
+  apiVersions?: string[];
   perAttemptTimeoutMs?: number;
   timeoutMs?: number;
 }
@@ -77,7 +79,8 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): 
     new Promise<T>((_, reject) => {
       timer = setTimeout(() => {
         const error = new Error(`${label} timed out.`);
-        (error as Error & { status?: number }).status = 504;
+        (error as Error & { status?: number; code?: string }).status = 504;
+        (error as Error & { status?: number; code?: string }).code = "ATTEMPT_TIMEOUT";
         reject(error);
       }, timeoutMs);
     }),
@@ -91,7 +94,8 @@ function remainingMs(deadline: number) {
 function assertWithinDeadline(deadline: number) {
   if (remainingMs(deadline) <= 1_000) {
     const error = new Error("AI request timed out before a usable Gemini response was returned.");
-    (error as Error & { status?: number }).status = 504;
+    (error as Error & { status?: number; code?: string }).status = 504;
+    (error as Error & { status?: number; code?: string }).code = "DEADLINE_TIMEOUT";
     throw error;
   }
 }
@@ -117,7 +121,12 @@ export async function runGemini(
     throw new Error("No Gemini API keys configured.");
   }
 
-  const apiVersions = ["v1beta", "v1"];
+  const apiVersions = options.apiVersions?.length ? options.apiVersions : ["v1beta", "v1"];
+  const configuredAttempts = options.models?.length
+    ? attempts.flatMap((attempt) =>
+        Array.from(new Set(options.models)).map((model) => ({ key: attempt.key, model }))
+      )
+    : attempts;
   let lastError: any;
   const deadline = Date.now() + (options.timeoutMs || 55_000);
   const perAttemptTimeoutMs = options.perAttemptTimeoutMs || 25_000;
@@ -137,15 +146,15 @@ export async function runGemini(
     );
   };
 
-  // Phase 1: Try each configured model with v1beta then v1
-  for (const attempt of attempts) {
+  // Phase 1: Try configured or caller-provided models first.
+  for (const attempt of configuredAttempts) {
     for (const apiVersion of apiVersions) {
       try {
         const response = await generate(attempt.key, apiVersion, attempt.model);
         return response.text || "";
       } catch (error: any) {
         lastError = error;
-        if (error?.status === 504) throw error;
+        if (error?.code === "DEADLINE_TIMEOUT") throw error;
       }
     }
   }
@@ -166,7 +175,7 @@ export async function runGemini(
             return response.text || "";
           } catch (error: any) {
             lastError = error;
-            if (error?.status === 504) throw error;
+            if (error?.code === "DEADLINE_TIMEOUT") throw error;
           }
         }
       }
@@ -183,7 +192,7 @@ export async function runGemini(
           return response.text || "";
         } catch (error: any) {
           lastError = error;
-          if (error?.status === 504) throw error;
+          if (error?.code === "DEADLINE_TIMEOUT") throw error;
         }
       }
     }
