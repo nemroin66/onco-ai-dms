@@ -26,13 +26,6 @@
       ]
     },
     {
-      "collectionGroup": "files",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "patientId", "order": "ASCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "patients",
       "queryScope": "COLLECTION",
       "fields": [
