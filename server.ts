@@ -71,7 +71,7 @@ app.use(helmet({
         ...(isDev ? ["ws://localhost:24678"] : []),
       ],
       fontSrc: ["'self'"],
-      frameSrc: ["'none'"],
+      frameSrc: ["https://vercel.live"],
       objectSrc: ["'none'"],
       baseUri: ["'self'"],
     },
