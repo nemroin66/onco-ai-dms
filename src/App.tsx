@@ -55,7 +55,10 @@ function AppContent() {
     return () => unsub();
   }, []);
 
-   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem("onc_sidebar_collapsed") === "true");
+   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    const stored = localStorage.getItem("onc_sidebar_collapsed");
+    return stored ? stored === "true" : true; // default collapsed on desktop
+  });
 
   useEffect(() => {
     localStorage.setItem("onc_sidebar_collapsed", String(sidebarCollapsed));
