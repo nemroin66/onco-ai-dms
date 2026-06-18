@@ -93,14 +93,8 @@ export default function Sidebar({ collapsed, onToggleCollapse, activeMenu, onCha
             </button>
           </div>
 
-          <div className={`mb-6 rounded-2xl border border-theme-highlight/10 bg-theme-surface dark:bg-slate-950 ${collapsed ? "p-2" : "p-4"} text-sm text-slate-700 dark:text-slate-200`}>
-            <p className={`font-semibold text-slate-900 dark:text-theme-on-accent ${collapsed ? "hidden" : ""}`}>Signed in as</p>
-            <p className={`mt-1 truncate font-bold ${collapsed ? "text-[11.5px] text-center" : ""}`}>{collapsed ? currentUser.name.charAt(0).toUpperCase() : currentUser.name}</p>
-            <p className={`text-[11.5px] text-slate-500 dark:text-slate-400 mt-1 ${collapsed ? "hidden" : ""}`}>{currentUser.role === 'admin' ? 'Administrator' : 'Clinician'}</p>
-          </div>
-
           {/* Navigation Links */}
-          <nav className="space-y-1.5 stagger">
+          <nav className="space-y-1.5 mt-4 stagger">
             {menuItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeMenu === item.name;
