@@ -17,3 +17,4 @@ oncodb-vercel-one-function/
 deployment-package/
 deployment-package.zip
 .vercel
+.env.clean

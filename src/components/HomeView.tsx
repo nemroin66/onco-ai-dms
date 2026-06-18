@@ -62,7 +62,11 @@ export default function HomeView({
 
   // Sort by updatedAt descending to show the most recent 50 records
   const recentRecords = [...allPatients]
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    .sort((a, b) => {
+      const ta = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+      const tb = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+      return tb - ta;
+    });
 
   const getStatusBadgeClass = (status: string) => {
     switch (status) {

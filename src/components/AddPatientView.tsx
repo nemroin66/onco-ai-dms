@@ -891,7 +891,7 @@ export default function AddPatientView({
     pastMedicalTable: { date: "", comorbidity: "", notes: "" },
     pastSurgicalTable: { date: "", surgery: "", complication: "", notes: "" },
     anthropometricTable: { date: "", height: "", weight: "", bmi: "", bsa: "" },
-    examFindingsTable: { date: "", organ_system: "", findings: "", notes: "" },
+    examFindingsTable: { date: "", entries: [{ organ_system: "", findings: "", notes: "" }] },
     otherAnthropometricTable: { date: "", measure: "", value: "", unit: "" },
     bloodTable: { blood_type: "", blood_purpose: "", blood_date: "", blood_findings: "", blood_notes: "" } as any,
     tumorMarkersTable: { marker_name: "", marker_value: "", marker_unit: "", marker_date: "", marker_purpose: "", marker_ref_range: "", marker_notes: "" },
@@ -2402,13 +2402,13 @@ export default function AddPatientView({
       const cc = countryCode.trim() || "+94";
       const pn = phoneNumber.trim();
       const tp = pn ? `${cc} ${pn}` : cc;
-    setSaveStage("Encrypting & uploading...");
-    setSaveProgress(40);
+      setSaveStage("Encrypting & uploading...");
+      setSaveProgress(40);
 
-    // Strip blank rows from all tables before saving
-    const cleanRecord = stripBlankTableRows(formState);
+      // Strip blank rows from all tables before saving
+      const cleanRecord = stripBlankTableRows(formState);
 
-    await onSavePatient({ ...cleanRecord, first_name: firstNameFromDOM, last_name: lastNameFromDOM, tp } as PatientRecord);
+      await onSavePatient({ ...cleanRecord, first_name: firstNameFromDOM, last_name: lastNameFromDOM, tp } as PatientRecord);
       setSaveProgress(90);
       setSaveStage("Finalizing...");
       // Brief delay so user sees progress fill
@@ -2691,7 +2691,7 @@ export default function AddPatientView({
             type="checkbox"
             id="checkbox-consent"
             checked={consentTaken}
-            onChange={(e) => setConsentTaken(e.target.checked)}
+            onChange={(e) => setConsentTaken(e.currentTarget.checked)}
             className="h-4.5 w-4.5 rounded border-slate-300 dark:border-slate-700 text-emerald-600 focus:ring-emerald-500 cursor-pointer hover-scale"
           />
           <label htmlFor="checkbox-consent" className={`text-xs font-bold cursor-pointer selection:bg-transparent transition-colors duration-500 ${
@@ -10427,7 +10427,7 @@ export default function AddPatientView({
                 <input
                   type="checkbox"
                   checked={formState.consent_ai_processing === true}
-                  onChange={(e) => setFormState(prev => ({ ...prev, consent_ai_processing: e.target.checked }))}
+                  onChange={(e) => setFormState(prev => ({ ...prev, consent_ai_processing: e.currentTarget.checked }))}
                   className="h-4 w-4 rounded border-slate-400 dark:border-slate-600 text-violet-600 focus:ring-violet-500"
                 />
                 <div className="flex flex-col">

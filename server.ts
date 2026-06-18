@@ -21,8 +21,8 @@ import {
 } from "./server-lib/analytics.js";
 import { generateAnalyticsSpec, generateStatisticalSpec } from "./server-lib/analytics-prompt.js";
 import { cleanBody, patientSchema } from "./server-lib/validate.js";
+import { ensureDriveFolder, uploadToDrive } from "./server-lib/drive.js";
 
-dotenv.config({ path: ".env.clean" });
 dotenv.config();
 
 const app = express();
@@ -84,14 +84,14 @@ app.use("/api/health", rateLimit({ windowMs: 60_000, max: 5, standardHeaders: tr
 /** Log real error server-side, return generic message to client. */
 function apiError(res: express.Response, error: unknown, defaultStatus = 500, defaultMessage = "Request failed.") {
   const err = error as any;
-  const status = typeof err?.status === "number" ? err.status : defaultStatus;
+  let status = typeof err?.status === "number" ? err.status : defaultStatus;
+  if (status < 400 || status > 599) status = defaultStatus;
   console.error(`[API ${status}]`, err?.message || err);
   if (err?.stack) console.error(err.stack);
   res.status(status).json({ error: defaultMessage });
 }
 
 type PatientDoc = Record<string, any>;
-type DriveFileDoc = Record<string, any>;
 
 let geminiRequestCount = 0;
 
@@ -249,6 +249,7 @@ function firestoreDocToObject(doc: any): PatientDoc {
 }
 
 async function getFirestoreDoc(collection: string, id: string): Promise<PatientDoc | null> {
+  if (!/^[a-zA-Z0-9_-]+$/.test(id)) throw new Error("Invalid document ID");
   const response = await firestoreFetch(`${collection}/${id}`);
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(await response.text());
@@ -281,65 +282,6 @@ async function saveDocument(collection: string, id: string, data: Record<string,
 
 async function deleteDocument(collection: string, id: string) {
   await firestoreFetch(`${collection}/${id}`, { method: "DELETE" });
-}
-
-async function ensureDriveFolder(patient: PatientDoc) {
-  if (patient.driveFolderId) return patient.driveFolderId;
-  if (!driveFolderId) throw new Error("DRIVE_FOLDER_ID or GOOGLE_DRIVE_FOLDER_ID is required.");
-
-  const token = await getDriveAccessToken();
-  const patientName = [patient.last_name, patient.first_name, patient.initials].filter(Boolean).join("_") || patient.id;
-  const response = await fetch("https://www.googleapis.com/drive/v3/files", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      name: patientName.replace(/[^\w .-]/g, "_"),
-      mimeType: "application/vnd.google-apps.folder",
-      parents: [driveFolderId],
-    }),
-  });
-  if (!response.ok) throw new Error(`Drive folder create failed: ${await response.text()}`);
-
-  const folderId = (await response.json()).id;
-  if (patient.id) {
-    try {
-      await saveDocument("patients", patient.id, { ...patient, driveFolderId: folderId, updatedAt: new Date().toISOString() });
-    } catch (error) {
-      console.warn(`Could not persist driveFolderId for patient ${patient.id}:`, error);
-    }
-  }
-  return folderId;
-}
-
-async function uploadToDrive(payload: DriveFileDoc, folderId: string) {
-  const token = await getDriveAccessToken();
-  const base64 = String(payload.contentBase64 || "").replace(/^data:.*?;base64,/, "");
-  const metadata = {
-    name: payload.name,
-    mimeType: payload.mimeType || "application/octet-stream",
-    parents: [folderId],
-  };
-  const boundary = `oncodb_${Date.now()}`;
-  const body = Buffer.concat([
-    Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n`),
-    Buffer.from(`--${boundary}\r\nContent-Type: ${metadata.mimeType}\r\n\r\n`),
-    Buffer.from(base64, "base64"),
-    Buffer.from(`\r\n--${boundary}--`),
-  ]);
-
-  const response = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,webContentLink,mimeType,size", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": `multipart/related; boundary=${boundary}`,
-    },
-    body,
-  });
-  if (!response.ok) throw new Error(`Drive upload failed: ${await response.text()}`);
-  return response.json();
 }
 
 async function deleteDriveFile(fileId: string) {
@@ -1054,7 +996,28 @@ app.post("/api/chat", async (req, res) => {
   if (!query || typeof query !== "string" || !query.trim()) {
     return res.status(400).json({ error: "Query is required" });
   }
+  if (query.length > 2000) {
+    return res.status(400).json({ error: "Query exceeds maximum length of 2000 characters." });
+  }
+  const cleanedQuery = query.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
+  if (cleanedQuery !== query) {
+    return res.status(400).json({ error: "Query contains invalid control characters." });
+  }
   const patient = patientRecord || patientContext || {};
+
+  // Verify user has access to this patient and AI consent is given
+  if (patient.id) {
+    const fetched = await getFirestoreDoc("patients", patient.id);
+    if (!fetched) return res.status(404).json({ error: "Patient not found." });
+    const userInfo = expressUser(req);
+    if (fetched.createdBy && fetched.createdBy !== userInfo.uid && userInfo.role !== "admin") {
+      return res.status(403).json({ error: "Access denied to this patient's records." });
+    }
+    if (fetched.consent_ai_processing === false) {
+      return res.status(403).json({ error: "Patient has not consented to AI data processing." });
+    }
+  }
+
   geminiRequestCount++;
 
   // Build a focused, clinically-structured summary of the patient record so the
@@ -1208,8 +1171,7 @@ Follow-up: ${pick(patient.follow_up_notes)}
 Performance / Vitals: ${pick(patient.general_notes)}
 
 == Clinician question ==
-${query}
-
+${cleanedQuery}
 == Answer requirements ==
 - Ground every claim in the patient's record above. If data is missing, say "not on file" rather than guessing.
 - When you reference a guideline, name the source and year (e.g. "NCCN 2024 breast cancer guidelines", "ESMO 2023", "ASCO 2022").

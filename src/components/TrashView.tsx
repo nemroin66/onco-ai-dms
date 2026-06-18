@@ -43,9 +43,6 @@ export default function TrashView({
       setIsClearing(true);
       try {
         await onClearTrash();
-      } catch (err) {
-        console.error("Failed to clear trash:", err);
-        throw err; // Re-throw to ensure error handling in App.tsx is triggered
       } finally {
         setIsClearing(false);
       }

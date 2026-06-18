@@ -84,7 +84,9 @@ function AppContent() {
     try {
       const res = await apiFetch("/api/patients/count");
       if (res.ok) setLiveCounts(await res.json());
-    } catch {}
+    } catch (err) {
+      console.error("Failed to refresh patient counts:", err);
+    }
   };
 
   const fetchClinicalDatabase = async () => {

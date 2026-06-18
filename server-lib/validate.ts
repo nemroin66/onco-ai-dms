@@ -42,5 +42,5 @@ export const fileSchema = z.object({
   name: z.string().max(300).optional().default("file"),
   mimeType: z.string().max(100).optional().default("application/octet-stream"),
   size: z.number().max(50 * 1024 * 1024).optional().default(0),
-  contentBase64: z.string().optional(),
+  contentBase64: z.string().regex(/^[A-Za-z0-9+/=]*$/, "Invalid base64 encoding").optional(),
 }).passthrough();

@@ -255,13 +255,13 @@ export default function PatientView({ patient, onEdit, onDelete, onClose }: Pati
     await new Promise(r => setTimeout(r, 200));
     setDeleteProgress(50);
     setDeleteStage("Moving to trash...");
-    onDelete(p.id);
+    // Set final states before calling onDelete (which may unmount)
     setDeleteProgress(100);
     setDeleteStage("Done");
-    await new Promise(r => setTimeout(r, 300));
     setIsDeleting(false);
     setDeleteProgress(0);
     setDeleteStage("");
+    onDelete(p.id);
   };
 
   return (

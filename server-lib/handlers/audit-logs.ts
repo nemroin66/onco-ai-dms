@@ -1,10 +1,13 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { listCollection } from "../firebase.js";
+import { vercelUser } from "../auth.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
   try {
+    const user = vercelUser(req);
+    if (user.role !== "admin") return res.status(403).json({ error: "Admin access required." });
     const logs = await listCollection("audit_log");
     const actionFilter = req.query.action as string | undefined;
     const limit = Math.min(parseInt(req.query.limit as string) || 200, 500);

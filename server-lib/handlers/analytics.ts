@@ -19,20 +19,23 @@ export default async function analytics(req: VercelRequest, res: VercelResponse)
       return res.json({ fields: getAnalyticsCatalog() });
     }
     if (route === "query" && req.method === "POST") {
-      return res.json(await runAnalyticsQuery(req.body));
+      return res.json(await runAnalyticsQuery(req.body, user.uid));
     }
     if (route === "statistics" && req.method === "POST") {
-      return res.json(await runAdvancedStatistics(req.body));
+      return res.json(await runAdvancedStatistics(req.body, user.uid));
     }
     if (route === "statistics/prompt" && req.method === "POST") {
       const plan = await generateStatisticalSpec(String(req.body?.prompt || ""));
+      const safeFilters = (Array.isArray(req.body?.filters) ? req.body.filters : []).filter(
+        (f: any) => f && typeof f === "object" && typeof f.field === "string" && typeof f.value === "string"
+      );
       const spec = {
         ...plan.spec,
         dateFrom: req.body?.dateFrom || plan.spec.dateFrom,
         dateTo: req.body?.dateTo || plan.spec.dateTo,
-        filters: [...plan.spec.filters, ...(Array.isArray(req.body?.filters) ? req.body.filters : [])],
+        filters: [...plan.spec.filters, ...safeFilters],
       };
-      return res.json({ ...plan, spec, result: await runAdvancedStatistics(spec) });
+      return res.json({ ...plan, spec, result: await runAdvancedStatistics(spec, user.uid) });
     }
     if (route === "prompt" && req.method === "POST") {
       return res.json(await generateAnalyticsSpec(String(req.body?.prompt || "")));

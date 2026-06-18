@@ -100,8 +100,9 @@ export default function SearchRecordsView({
         const data = await res.json();
         setSearchResults(data);
       }
-    } catch {
-      console.error("Search failed");
+    } catch (err) {
+      console.error("Search failed:", err);
+      setSearchResults([]);
     } finally {
       setSearching(false);
     }
