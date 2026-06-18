@@ -8,6 +8,8 @@ export interface DocumentFillPayload {
   fileName?: string;
   sectionKey?: string;
   sectionTarget?: string;
+  modelStartIndex?: number;
+  extractionAttempt?: number;
 }
 
 export interface DocumentFillReport {
@@ -35,6 +37,7 @@ const SUPPORTED_MIME_TYPES = new Set([
   "application/json",
 ]);
 const BLOCKED_FORM_KEYS = new Set(["id", "auto_id", "createdAt", "updatedAt", "createdBy", "isDeleted", "driveFolderId"]);
+const DOCUMENT_FILL_MODELS = ["gemini-2.5-flash-lite", "gemini-2.0-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash"];
 
 export interface SourceEvidence {
   quote: string;
@@ -290,6 +293,11 @@ function normalizeMimeType(mimeType: string, fileName: string) {
   return mimeType || "application/octet-stream";
 }
 
+function rotateModels(models: string[], startIndex: number) {
+  const safeIndex = Number.isFinite(startIndex) ? Math.max(0, Math.floor(startIndex)) % models.length : 0;
+  return [...models.slice(safeIndex), ...models.slice(0, safeIndex)];
+}
+
 function unwrapData(rawData: any) {
   const data = rawData?.data && typeof rawData.data === "object" ? rawData.data : rawData;
   const flat: Record<string, any> = {};
@@ -542,7 +550,7 @@ export async function runDocumentFill(payload: DocumentFillPayload) {
   }
 
   const text = await runGemini([{ role: "user", parts }], systemInstruction, "application/json", {
-    models: ["gemini-2.5-flash-lite", "gemini-2.0-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash"],
+    models: rotateModels(DOCUMENT_FILL_MODELS, Number(payload.modelStartIndex || 0)),
     apiVersions: ["v1beta"],
     enableDiscovery: false,
     fallbackModels: [],

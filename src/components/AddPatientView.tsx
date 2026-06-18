@@ -5,7 +5,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { apiFetch } from "../lib/api-client";
+import { ApiError, apiFetch } from "../lib/api-client";
 import {
   ShieldCheck,
   Sparkles,
@@ -97,6 +97,8 @@ interface AddPatientViewProps {
 
 const AI_DOCUMENT_ACCEPT = ".pdf,.csv,.json,.txt,.jpg,.jpeg,.png,.tif,.tiff,.bmp,.webp,image/jpeg,image/png,image/tiff,image/bmp,image/webp,text/plain,text/csv,application/json";
 const DRIVE_DOCUMENT_ACCEPT = ".pdf,.jpg,.jpeg,.png,.tif,.tiff,.bmp,.webp,image/jpeg,image/png,image/tiff,image/bmp,image/webp,application/pdf";
+const AI_EXTRACTION_MODELS = ["gemini-2.5-flash-lite", "gemini-2.0-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash"];
+const AI_EXTRACTION_REQUEST_TIMEOUT_MS = 75_000;
 
 type SubTableProps = {
   title: string;
@@ -2069,6 +2071,70 @@ export default function AddPatientView({
     e.target.value = "";
   };
 
+  const waitForAiRetry = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+  const isRetryableAiExtractionError = (error: any) => {
+    if (error instanceof ApiError) {
+      return error.status === 0 || error.status === 504 || error.status >= 500 || error.body?.retryable === true;
+    }
+    return /timeout|timed out|network|failed to fetch/i.test(String(error?.message || error || ""));
+  };
+
+  const runAiDocumentFillUntilComplete = async (
+    file: File,
+    base64: string,
+    uploadPatientId: string,
+    sectionTarget?: { section: string; label: string }
+  ) => {
+    let attempt = 0;
+
+    while (true) {
+      const modelIndex = attempt % AI_EXTRACTION_MODELS.length;
+      const modelName = AI_EXTRACTION_MODELS[modelIndex];
+      setExtractProgress(Math.min(62, 24 + attempt * 4));
+      setExtractStage(attempt === 0
+        ? `Sending document to AI form-fill agent (${modelName})`
+        : `Retry ${attempt + 1}: trying fallback AI model (${modelName})`
+      );
+
+      try {
+        const response = await apiFetch("/api/document-fill", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          timeout: AI_EXTRACTION_REQUEST_TIMEOUT_MS,
+          retries: 0,
+          body: JSON.stringify({
+            fileContent: base64,
+            mimeType: file.type || "application/octet-stream",
+            fileName: file.name,
+            patientId: uploadPatientId || undefined,
+            sectionTarget: sectionTarget?.label || undefined,
+            sectionKey: sectionTarget?.section || undefined,
+            extractionAttempt: attempt,
+            modelStartIndex: modelIndex,
+          })
+        });
+
+        const extractionResponse = await response.json();
+        if (extractionResponse?.error) {
+          throw new Error(extractionResponse.error);
+        }
+        return extractionResponse;
+      } catch (error: any) {
+        if (!isRetryableAiExtractionError(error)) {
+          throw error;
+        }
+
+        const waitMs = Math.min(30_000, 5_000 + attempt * 2_500);
+        console.warn("AI document understanding timed out; retrying with fallback model.", error);
+        setExtractProgress(Math.min(78, 34 + attempt * 4));
+        setExtractStage(`AI model timed out. Waiting ${Math.ceil(waitMs / 1000)}s, then continuing with the next fallback model.`);
+        await waitForAiRetry(waitMs);
+        attempt += 1;
+      }
+    }
+  };
+
   // AI document understanding or regular file upload processor
   const processAttachment = async (file: File, isPureMedia = false, sectionTarget?: { section: string; label: string }) => {
     if (isPureMedia) {
@@ -2104,31 +2170,10 @@ export default function AddPatientView({
       let agentReport: any = null;
       if (!isPureMedia) {
         try {
-          // Trigger AI document understanding and form filling.
-          const response = await apiFetch("/api/document-fill", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              fileContent: base64,
-              mimeType: file.type || "application/octet-stream",
-              fileName: file.name,
-              patientId: uploadPatientId || undefined,
-              sectionTarget: sectionTarget?.label || undefined,
-              sectionKey: sectionTarget?.section || undefined
-            })
-          });
-
-          if (!response.ok) {
-            const errorBody = await response.json().catch(() => null);
-            throw new Error(errorBody?.error || `AI document understanding failed with HTTP ${response.status}`);
-          }
-
+          // Trigger AI document understanding and keep retrying transient timeouts before any Drive upload.
+          const extractionResponse = await runAiDocumentFillUntilComplete(file, base64, uploadPatientId, sectionTarget);
           setExtractProgress(68);
           setExtractStage("Mapping understood clinical facts to form fields");
-          const extractionResponse = await response.json();
-          if (extractionResponse?.error) {
-            throw new Error(extractionResponse.error);
-          }
           const {
             driveFile: extractedDriveFile,
             agentReport: extractedAgentReport,
@@ -2214,29 +2259,8 @@ export default function AddPatientView({
           );
         } catch (error: any) {
           console.error("AI document understanding failed:", error);
-          await notify(error?.message || "AI could not understand and fill from this document. Please try another file or verify Gemini API settings.", "AI Fill Failed", "danger");
-          if (onUploadFile && uploadPatientId) {
-            try {
-              setExtractProgress(60);
-              setExtractStage("Saving document to Drive without AI filling");
-              await onUploadFile({
-                name: file.name,
-                mimeType: file.type || "application/octet-stream",
-                size: file.size,
-                patientId: uploadPatientId,
-                contentBase64: base64,
-                extracted: false
-              });
-              setExtractProgress(100);
-              setExtractStage("Upload complete without AI filling");
-              await notify("The document was uploaded to Google Drive without AI form filling.", "Upload Complete", "success");
-            } catch (uploadError) {
-              console.error("Drive upload fallback failed:", uploadError);
-              await notify("AI form filling failed and the direct Google Drive upload could not be completed.", "Upload Failed", "danger");
-            }
-          } else if (!uploadPatientId) {
-            await notify("Save the patient record first, then upload this document to the patient vault.", "Save Patient First", "warning");
-          }
+          setExtractStage("AI extraction stopped before Drive upload");
+          await notify(error?.message || "AI could not complete extraction. The source document was not uploaded to Drive because AI filling did not finish.", "AI Fill Failed", "danger");
           return;
         }
       }
