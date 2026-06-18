@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { apiFetch } from "./lib/api-client";
 import LoginScreen from "./components/LoginScreen";
 import Sidebar, { MenuType } from "./components/Sidebar";
@@ -60,10 +60,14 @@ function AppContent() {
    const [deletedPatients, setDeletedPatients] = useState<PatientRecord[]>([]);
    const [allFiles, setAllFiles] = useState<DiskFile[]>([]);
    const [selectedPatient, setSelectedPatient] = useState<PatientRecord | null>(null);
-    const [patientUnderEdit, setPatientUnderEdit] = useState<PatientRecord | null>(null);
-    const [formDirty, setFormDirty] = useState(false);
-    const [isLoadingMain, setIsLoadingMain] = useState(false);
-    const [liveCounts, setLiveCounts] = useState<{ active: number; deleted: number; total: number } | null>(null);
+   const [patientUnderEdit, setPatientUnderEdit] = useState<PatientRecord | null>(null);
+   const [formDirty, setFormDirty] = useState(false);
+   const [isLoadingMain, setIsLoadingMain] = useState(false);
+   const [isLoadingFiles, setIsLoadingFiles] = useState(false);
+   const [filesLoaded, setFilesLoaded] = useState(false);
+   const [liveCounts, setLiveCounts] = useState<{ active: number; deleted: number; total: number } | null>(null);
+   const fetchReqIdRef = useRef(0);
+   const fileFetchReqIdRef = useRef(0);
 
 
 // Force Matte Light as default — ignores browser/OS/prefers-color-scheme.
@@ -89,40 +93,52 @@ const handleRefreshCounts = useCallback(async () => {
   }
 }, []);
 
-// Auto-incrementing request ID to discard stale parallel responses
-let fetchReqId = 0;
-
 const fetchClinicalDatabase = async () => {
-  const reqId = ++fetchReqId;
+  const reqId = ++fetchReqIdRef.current;
   setIsLoadingMain(true);
   try {
-    // Fetch patients and files in parallel — no data dependency
-    const [patRes, fileRes] = await Promise.all([
-      apiFetch("/api/patients?includeDeleted=true&limit=50"),
-      apiFetch("/api/files"),
-    ]);
-    if (reqId !== fetchReqId) return; // stale
+    const patRes = await apiFetch("/api/patients?includeDeleted=true&limit=50");
+    if (reqId !== fetchReqIdRef.current) return; // stale
 
     if (patRes.ok) {
       const patientsData = await patRes.json();
-      if (reqId !== fetchReqId) return;
+      if (reqId !== fetchReqIdRef.current) return;
       setAllPatients(patientsData.filter((p: PatientRecord) => !p.isDeleted));
       setDeletedPatients(patientsData.filter((p: PatientRecord) => p.isDeleted));
-    }
-
-    if (fileRes.ok) {
-      const filesData = await fileRes.json();
-      if (reqId !== fetchReqId) return;
-      setAllFiles(filesData);
     }
   } catch (err) {
     console.error("Clinical Server Fetch failed:", err);
   } finally {
-    if (reqId === fetchReqId) {
+    if (reqId === fetchReqIdRef.current) {
       setIsLoadingMain(false);
     }
   }
 };
+
+const fetchClinicalFiles = useCallback(async () => {
+  const reqId = ++fileFetchReqIdRef.current;
+  setIsLoadingFiles(true);
+  try {
+    const fileRes = await apiFetch("/api/files");
+    if (reqId !== fileFetchReqIdRef.current) return;
+    if (fileRes.ok) {
+      setAllFiles(await fileRes.json());
+      setFilesLoaded(true);
+    }
+  } catch (err) {
+    console.error("Clinical file metadata fetch failed:", err);
+  } finally {
+    if (reqId === fileFetchReqIdRef.current) {
+      setIsLoadingFiles(false);
+    }
+  }
+}, []);
+
+useEffect(() => {
+  if (currentUser && activeMenu === "Add Patient" && !filesLoaded && !isLoadingFiles) {
+    void fetchClinicalFiles();
+  }
+}, [activeMenu, currentUser, fetchClinicalFiles, filesLoaded, isLoadingFiles]);
 
 const handleLoginSuccess = useCallback((user: UserAccount) => {
   setCurrentUser(user);
@@ -203,9 +219,9 @@ const handleSignOut = useCallback(async () => {
       throw new Error("Failed to save virtual drive file metadata");
     }
 
-    // Refresh database files
-    await fetchClinicalDatabase();
     const uploadedFile = await response.json();
+    setAllFiles((current) => [uploadedFile, ...current.filter((file) => file.id !== uploadedFile.id)]);
+    setFilesLoaded(true);
     return uploadedFile;
   };
 

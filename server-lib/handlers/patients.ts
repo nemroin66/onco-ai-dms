@@ -27,7 +27,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (oncologyFilter) where.push({ field: "oncology", op: "==", value: oncologyFilter });
       if (bhtFilter) where.push({ field: "bht", op: "==", value: bhtFilter });
 
-      let patients = await listCollection("patients", { where });
+      let patients: Record<string, any>[];
+      if (isSearch) {
+        patients = await listCollection("patients", { where });
+      } else {
+        const queryLimit = includeDeleted ? limit : Math.min(limit * 2, 5000);
+        try {
+          patients = await listCollection("patients", { where, orderBy: "updatedAt desc", limit: queryLimit });
+        } catch (error: any) {
+          console.warn("[patients] Falling back to in-memory ordering:", error?.message || error);
+          patients = await listCollection("patients", { where });
+        }
+      }
 
       // Filter isDeleted in-memory to support docs missing the field
       if (!includeDeleted) {
@@ -49,7 +60,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .map((s: any) => s.patient)
           .slice(0, limit);
       } else {
-        patients.sort((a: any, b: any) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
+        if (patients.length > limit) {
+          patients.sort((a: any, b: any) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
+        }
         patients = patients.slice(0, limit);
       }
 
