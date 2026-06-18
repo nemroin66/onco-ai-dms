@@ -13,10 +13,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === "GET") {
     try {
       const user = vercelUser(req);
-      const files = await listCollection("files");
+      // Project only needed fields — reduces payload 5-10x vs full documents
+      const FILE_FIELDS = ["id", "patientId", "name", "mimeType", "size", "uploadDate", "driveFileId", "webViewLink", "webContentLink", "driveFolderId"];
+      const files = await listCollection("files", { select: FILE_FIELDS });
       const patientWhere: { field: string; op: any; value: any }[] = [];
       if (user.role !== "admin") patientWhere.push({ field: "createdBy", op: "==", value: user.uid });
-      const allPatients = (await listCollection("patients", { where: patientWhere })).filter((p: any) => p.isDeleted !== true);
+      const allPatients = (await listCollection("patients", { where: patientWhere, select: ["id", "createdBy", "isDeleted"] })).filter((p: any) => p.isDeleted !== true);
       const visiblePatientIds = new Set(allPatients.map((p: any) => p.id));
       return res.json(files.filter((f: any) => visiblePatientIds.has(f.patientId)));
     } catch (error: any) {

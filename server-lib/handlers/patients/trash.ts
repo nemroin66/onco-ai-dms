@@ -24,6 +24,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === "POST") {
     try {
       const user = vercelUser(req);
+      if (user.role !== "admin") return res.status(403).json({ error: "Admin access required." });
       const patients = await listCollection("patients");
       const deletedPatients = patients.filter((p: any) => p.isDeleted);
 

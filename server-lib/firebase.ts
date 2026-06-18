@@ -82,13 +82,30 @@ export interface ListCollectionOpts {
   limit?: number;
   orderBy?: string;
   where?: Array<{ field: string; op: WhereFilterOp; value: any }>;
+  /** Return only these fields (Firestore projection). Reduces response size. */
+  select?: string[];
 }
+
+/** Allowed patient field names for Firestore where/orderBy to prevent arbitrary field queries. */
+const ALLOWED_QUERY_FIELDS = new Set([
+  "createdBy", "isDeleted", "oncology", "bht", "updatedAt", "createdAt",
+  "first_name", "last_name", "initials", "title", "auto_id", "nic", "tp",
+  "clinic", "hospital", "ward_no", "gender", "dob", "age", "patientId",
+  "timestamp",
+]);
 
 export async function listCollection(collection: string, opts?: ListCollectionOpts): Promise<Record<string, any>[]> {
   let query: FirebaseFirestore.Query = db().collection(collection);
 
+  if (opts?.select && opts.select.length > 0) {
+    query = query.select(...opts.select);
+  }
+
   if (opts?.where) {
     for (const w of opts.where) {
+      if (!ALLOWED_QUERY_FIELDS.has(w.field)) {
+        throw new Error(`Query field "${w.field}" is not allowed.`);
+      }
       query = query.where(w.field, w.op, w.value);
     }
   }
@@ -96,6 +113,9 @@ export async function listCollection(collection: string, opts?: ListCollectionOp
   if (opts?.orderBy) {
     const parts = opts.orderBy.split(/\s+/);
     const field = parts[0];
+    if (!ALLOWED_QUERY_FIELDS.has(field)) {
+      throw new Error(`Order field "${field}" is not allowed.`);
+    }
     const dir: OrderByDirection = (parts[1] as OrderByDirection) || "asc";
     query = query.orderBy(field, dir);
   }

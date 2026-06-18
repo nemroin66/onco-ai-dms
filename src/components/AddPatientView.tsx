@@ -76,6 +76,8 @@ import { coerceOncologyTypes } from "../utils/oncologyChoiceMapping";
 import {
   ADL_CHOICES,
   CHARLSON_CHOICES,
+  CHARLSON_CONDITIONS,
+  ECOG_OPTIONS,
   IADL_CHOICES,
   SYSTEM_SYMPTOMS,
   TUMOUR_SITE_CATEGORIES,
@@ -834,11 +836,12 @@ export default function AddPatientView({
   }, [initialPatientData]);
 
   // Auto-calculate time from first complaint to diagnosis
+  // Use serialized dates as dep to avoid array-reference cascade
+  const complaintDateStr = JSON.stringify((formState.presentingComplaintsTable || []).map(r => r.date).filter(Boolean).sort());
+  const diagDateStr = JSON.stringify((formState.definitiveDiagnosisTable || []).map(r => r.date).filter(Boolean).sort());
   useEffect(() => {
-    const complaintDates = (formState.presentingComplaintsTable || [])
-      .map(r => r.date).filter(Boolean).sort();
-    const diagDates = (formState.definitiveDiagnosisTable || [])
-      .map(r => r.date).filter(Boolean).sort();
+    const complaintDates = JSON.parse(complaintDateStr) as string[];
+    const diagDates = JSON.parse(diagDateStr) as string[];
     if (complaintDates.length > 0 && diagDates.length > 0) {
       const d1 = new Date(complaintDates[0]);
       const d2 = new Date(diagDates[0]);
@@ -847,7 +850,7 @@ export default function AddPatientView({
         setFormState(prev => ({ ...prev, diagnosis_delay_days: String(diff) }));
       }
     }
-  }, [formState.presentingComplaintsTable, formState.definitiveDiagnosisTable]);
+  }, [complaintDateStr, diagDateStr]);
 
   // Virtual files for this patient
   const patientFiles = formState.id
@@ -2045,7 +2048,9 @@ export default function AddPatientView({
     }
     const files = e.dataTransfer.files;
     if (files && files.length > 0) {
-      await processAttachment(files[0]);
+      for (let i = 0; i < files.length; i++) {
+        await processAttachment(files[i]);
+      }
     }
   };
 
@@ -2056,8 +2061,12 @@ export default function AddPatientView({
     }
     const files = e.target.files;
     if (files && files.length > 0) {
-      await processAttachment(files[0]);
+      for (let i = 0; i < files.length; i++) {
+        await processAttachment(files[i]);
+      }
     }
+    // Reset input so same file can be re-selected
+    e.target.value = "";
   };
 
   // AI document understanding or regular file upload processor
@@ -2745,6 +2754,7 @@ export default function AddPatientView({
                 ref={fileInputRef}
                 onChange={handleFileChange}
                 className="hidden"
+                multiple
                 accept={AI_DOCUMENT_ACCEPT}
               />
 
@@ -4089,14 +4099,7 @@ export default function AddPatientView({
                 </div>
                 <div className="p-3">
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-1.5">
-                    {[
-                      { value: "0", label: "0 — Fully active" },
-                      { value: "1", label: "1 — Restricted, ambulatory" },
-                      { value: "2", label: "2 — Ambulatory, capable of selfcare" },
-                      { value: "3", label: "3 — Limited selfcare, confined >50%" },
-                      { value: "4", label: "4 — Completely disabled" },
-                      { value: "5", label: "5 — Dead" },
-                    ].map(opt => {
+                    {ECOG_OPTIONS.map(opt => {
                       const selected = formState.ecog_status === opt.value;
                       return (
                         <label
@@ -4258,27 +4261,7 @@ export default function AddPatientView({
                 <div className="p-3">
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-1.5 mb-3">
                     {(() => {
-                      const conditions: { label: string; weight: number; key: string }[] = [
-                        { label: "Myocardial infarction", weight: 1, key: "mi" },
-                        { label: "Congestive heart failure", weight: 1, key: "chf" },
-                        { label: "Peripheral vascular disease", weight: 1, key: "pvd" },
-                        { label: "Cerebrovascular disease", weight: 1, key: "cvd" },
-                        { label: "Dementia", weight: 1, key: "dementia" },
-                        { label: "Chronic pulmonary disease", weight: 1, key: "copd" },
-                        { label: "Connective tissue disease", weight: 1, key: "ctd" },
-                        { label: "Peptic ulcer disease", weight: 1, key: "pud" },
-                        { label: "Mild liver disease", weight: 1, key: "mld" },
-                        { label: "Diabetes (uncomplicated)", weight: 1, key: "dm_uncomplicated" },
-                        { label: "Diabetes (with complications)", weight: 2, key: "dm_complicated" },
-                        { label: "Hemiplegia / Paraplegia", weight: 2, key: "hemiplegia" },
-                        { label: "Moderate/severe renal disease", weight: 2, key: "renal" },
-                        { label: "Malignancy (without mets)", weight: 2, key: "malignancy" },
-                        { label: "Leukemia", weight: 2, key: "leukemia" },
-                        { label: "Lymphoma", weight: 2, key: "lymphoma" },
-                        { label: "Moderate/severe liver disease", weight: 3, key: "sld" },
-                        { label: "Metastatic solid tumor", weight: 6, key: "mets" },
-                        { label: "AIDS / HIV", weight: 6, key: "hiv" },
-                      ];
+                      const conditions = CHARLSON_CONDITIONS;
                       const selected = (formState.charlson_conditions || "").split(",").filter(Boolean);
                       const toggle = (key: string) => {
                         const current = new Set(selected);

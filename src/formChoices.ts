@@ -24,6 +24,39 @@ export const ADL_CHOICES: { key: string; label: string }[] = [];
 export const IADL_CHOICES: { key: string; label: string }[] = [];
 export const CHARLSON_CHOICES: { key: string; label: string }[] = [];
 
+/** ECOG Performance Status options — stable reference, avoids inline array recreation. */
+export const ECOG_OPTIONS = [
+  { value: "0", label: "0 — Fully active" },
+  { value: "1", label: "1 — Restricted, ambulatory" },
+  { value: "2", label: "2 — Ambulatory, capable of selfcare" },
+  { value: "3", label: "3 — Limited selfcare, confined >50%" },
+  { value: "4", label: "4 — Completely disabled" },
+  { value: "5", label: "5 — Dead" },
+] as const;
+
+/** Charlson Comorbidity Index conditions — used for scoring widget. */
+export const CHARLSON_CONDITIONS = [
+  { label: "Myocardial infarction", weight: 1, key: "mi" },
+  { label: "Congestive heart failure", weight: 1, key: "chf" },
+  { label: "Peripheral vascular disease", weight: 1, key: "pvd" },
+  { label: "Cerebrovascular disease", weight: 1, key: "cvd" },
+  { label: "Dementia", weight: 1, key: "dementia" },
+  { label: "Chronic pulmonary disease", weight: 1, key: "copd" },
+  { label: "Connective tissue disease", weight: 1, key: "ctd" },
+  { label: "Peptic ulcer disease", weight: 1, key: "pud" },
+  { label: "Mild liver disease", weight: 1, key: "mld" },
+  { label: "Diabetes (uncomplicated)", weight: 1, key: "dm_uncomplicated" },
+  { label: "Diabetes (with complications)", weight: 2, key: "dm_complicated" },
+  { label: "Hemiplegia / Paraplegia", weight: 2, key: "hemiplegia" },
+  { label: "Moderate/severe renal disease", weight: 2, key: "renal" },
+  { label: "Malignancy (without mets)", weight: 2, key: "malignancy" },
+  { label: "Leukemia", weight: 2, key: "leukemia" },
+  { label: "Lymphoma", weight: 2, key: "lymphoma" },
+  { label: "Moderate/severe liver disease", weight: 3, key: "sld" },
+  { label: "Metastatic solid tumor", weight: 6, key: "mets" },
+  { label: "AIDS / HIV", weight: 6, key: "hiv" },
+] as const;
+
 export const TUMOUR_SITE_CATEGORIES: Record<string, string[]> = {
   "Head and Neck": [
     "Lip", "Tongue (Anterior 2/3)", "Base of Tongue", "Salivary Gland (Parotid)",

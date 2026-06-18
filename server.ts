@@ -978,16 +978,18 @@ app.post("/api/wipe", async (_req, res) => {
   }
 });
 
-app.get("/api/quota", (_req, res) => {
+app.get("/api/quota", (req, res) => {
+  const user = expressUser(req);
   const configuredKeys = [primaryGeminiKey, secondaryGeminiKey].filter(Boolean).length;
-  res.json({
-    configuredKeys,
-    requestsMade: geminiRequestCount,
-    quotaLimit: 1500 * Math.max(configuredKeys, 1),
-    quotaRemainingEstimate: Math.max(0, 1500 * Math.max(configuredKeys, 1) - geminiRequestCount),
+  const info = {
+    configuredKeys: user.role === "admin" ? configuredKeys : (configuredKeys ? 1 : 0),
+    requestsMade: user.role === "admin" ? geminiRequestCount : undefined,
+    quotaLimit: user.role === "admin" ? 1500 * Math.max(configuredKeys, 1) : undefined,
+    quotaRemainingEstimate: user.role === "admin" ? Math.max(0, 1500 * Math.max(configuredKeys, 1) - geminiRequestCount) : undefined,
     resetDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split("T")[0],
     status: configuredKeys ? "Active" : "No Gemini key configured",
-  });
+  };
+  res.json(info);
 });
 
 app.post("/api/chat", async (req, res) => {

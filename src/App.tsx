@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { apiFetch } from "./lib/api-client";
 import LoginScreen from "./components/LoginScreen";
 import Sidebar, { MenuType } from "./components/Sidebar";
@@ -66,62 +66,73 @@ function AppContent() {
     const [liveCounts, setLiveCounts] = useState<{ active: number; deleted: number; total: number } | null>(null);
 
 
-  // Force Matte Light as default — ignores browser/OS/prefers-color-scheme.
-  useEffect(() => {
-    const mode = localStorage.getItem("theme") || "light";
-    document.documentElement.classList.toggle("dark", mode === "dark");
-    document.documentElement.dataset.themeMode = mode;
-  }, []);
+// Force Matte Light as default — ignores browser/OS/prefers-color-scheme.
+useEffect(() => {
+  const mode = localStorage.getItem("theme") || "light";
+  document.documentElement.classList.toggle("dark", mode === "dark");
+  document.documentElement.dataset.themeMode = mode;
+}, []);
 
-  // Fetch all databases logs on session start
-  useEffect(() => {
-    if (currentUser) {
-      fetchClinicalDatabase();
+// Fetch all databases logs on session start
+useEffect(() => {
+  if (currentUser) {
+    fetchClinicalDatabase();
+  }
+}, [currentUser]);
+
+const handleRefreshCounts = useCallback(async () => {
+  try {
+    const res = await apiFetch("/api/patients/count");
+    if (res.ok) setLiveCounts(await res.json());
+  } catch (err) {
+    console.error("Failed to refresh patient counts:", err);
+  }
+}, []);
+
+// Auto-incrementing request ID to discard stale parallel responses
+let fetchReqId = 0;
+
+const fetchClinicalDatabase = async () => {
+  const reqId = ++fetchReqId;
+  setIsLoadingMain(true);
+  try {
+    // Fetch patients and files in parallel — no data dependency
+    const [patRes, fileRes] = await Promise.all([
+      apiFetch("/api/patients?includeDeleted=true&limit=50"),
+      apiFetch("/api/files"),
+    ]);
+    if (reqId !== fetchReqId) return; // stale
+
+    if (patRes.ok) {
+      const patientsData = await patRes.json();
+      if (reqId !== fetchReqId) return;
+      setAllPatients(patientsData.filter((p: PatientRecord) => !p.isDeleted));
+      setDeletedPatients(patientsData.filter((p: PatientRecord) => p.isDeleted));
     }
-  }, [currentUser]);
 
-  const handleRefreshCounts = async () => {
-    try {
-      const res = await apiFetch("/api/patients/count");
-      if (res.ok) setLiveCounts(await res.json());
-    } catch (err) {
-      console.error("Failed to refresh patient counts:", err);
+    if (fileRes.ok) {
+      const filesData = await fileRes.json();
+      if (reqId !== fetchReqId) return;
+      setAllFiles(filesData);
     }
-  };
-
-  const fetchClinicalDatabase = async () => {
-    setIsLoadingMain(true);
-    try {
-      // Patients list, including deleted records so trash can work consistently
-      const patRes = await apiFetch("/api/patients?includeDeleted=true&limit=50");
-      if (patRes.ok) {
-        const patientsData = await patRes.json();
-        setAllPatients(patientsData.filter((p: PatientRecord) => !p.isDeleted));
-        setDeletedPatients(patientsData.filter((p: PatientRecord) => p.isDeleted));
-      }
-      
-      // Virtual Google Drive files list
-      const fileRes = await apiFetch("/api/files");
-      if (fileRes.ok) {
-        const filesData = await fileRes.json();
-        setAllFiles(filesData);
-      }
-    } catch (err) {
-      console.error("Clinical Server Fetch failed:", err);
-    } finally {
+  } catch (err) {
+    console.error("Clinical Server Fetch failed:", err);
+  } finally {
+    if (reqId === fetchReqId) {
       setIsLoadingMain(false);
     }
-  };
+  }
+};
 
-  const handleLoginSuccess = (user: UserAccount) => {
-    setCurrentUser(user);
-  };
+const handleLoginSuccess = useCallback((user: UserAccount) => {
+  setCurrentUser(user);
+}, []);
 
-  const handleSignOut = async () => {
-    await logout();
-    setCurrentUser(null);
-    setActiveMenu("Home");
-  };
+const handleSignOut = useCallback(async () => {
+  await logout();
+  setCurrentUser(null);
+  setActiveMenu("Home");
+}, []);
 
   // Create or Update Patient Record in database
   const handleSavePatient = async (record: PatientRecord): Promise<PatientRecord> => {
@@ -219,6 +230,43 @@ function AppContent() {
       throw new Error("Failed to purge db");
     }
   };
+
+  const handleNavigateHome = useCallback(() => {
+    setFormDirty(false);
+    setPatientUnderEdit(null);
+    setActiveMenu("Home");
+  }, []);
+
+  const handleHeroDone = useCallback(() => {
+    setShowIntro(false);
+    setIntroDone(true);
+    sessionStorage.setItem("onc_intro_seen", "1");
+  }, []);
+
+  const handleUpdateUser = useCallback((updates: { name?: string; role?: "admin" | "user" }) => {
+    if (updates.name) {
+      setCurrentUser((prev) => prev ? { ...prev, name: updates.name! } : prev);
+    }
+  }, []);
+
+  const handleChangeMenu = useCallback(async (menu: MenuType) => {
+    if (formDirty) {
+      const leave = await confirmDialog("You have unsaved changes. Are you sure you want to leave without saving?", "Unsaved Changes", "warning", "Leave", "Stay");
+      if (!leave) return;
+    }
+    setSelectedPatient(null);
+    setPatientUnderEdit(null);
+    setFormDirty(false);
+    setActiveMenu(menu);
+  }, [formDirty]);
+
+  // Memoize derived props to avoid unnecessary child re-renders
+  const settingsUserProp = useMemo(() => currentUser ? {
+    uid: currentUser.uid,
+    name: currentUser.name,
+    role: currentUser.role,
+    email: currentUser.email,
+  } : null, [currentUser?.uid, currentUser?.name, currentUser?.role, currentUser?.email]);
 
   // Restore a deleted patient
   const handleRestorePatient = async (id: string) => {
@@ -370,11 +418,7 @@ function AppContent() {
                key={patientUnderEdit ? patientUnderEdit.id : "new_patient"}
                initialPatientData={patientUnderEdit}
                onSavePatient={handleSavePatient}
-               onNavigateHome={() => {
-                 setFormDirty(false);
-                 setPatientUnderEdit(null);
-                 setActiveMenu("Home");
-               }}
+               onNavigateHome={handleNavigateHome}
                allExistingFiles={allFiles}
                onUploadFile={handleUploadFile}
                totalPatientsCount={allPatients.length}
@@ -416,14 +460,10 @@ function AppContent() {
         return (
           <PageTransition routeKey={routeKey} variant="fade">
             <SettingsView
-              currentUser={{ uid: currentUser?.uid, name: currentUser.name, role: currentUser.role, email: currentUser.email }}
+              currentUser={settingsUserProp}
               allPatients={allPatients}
               onWipeDatabase={handleWipeDatabase}
-              onUpdateUser={(updates) => {
-                if (updates.name) {
-                  setCurrentUser((prev) => prev ? { ...prev, name: updates.name! } : prev);
-                }
-              }}
+              onUpdateUser={handleUpdateUser}
             />
           </PageTransition>
         );
@@ -439,29 +479,14 @@ function AppContent() {
           appName="Oncology Data Manager"
           tagline="Intelligent clinical dossiers at your fingertips"
           duration={1700}
-          onDone={() => {
-            setShowIntro(false);
-            setIntroDone(true);
-            sessionStorage.setItem("onc_intro_seen", "1");
-          }}
+          onDone={handleHeroDone}
         />
       )}
 
       {/* Sidebar Navigation */}
       <Sidebar
         activeMenu={activeMenu}
-        onChangeMenu={async (menu) => {
-          // Warn before leaving unsaved form
-          if (formDirty) {
-            const leave = await confirmDialog("You have unsaved changes. Are you sure you want to leave without saving?", "Unsaved Changes", "warning", "Leave", "Stay");
-            if (!leave) return;
-          }
-          // Close patient viewer and discard edits when navigating away
-          setSelectedPatient(null);
-          setPatientUnderEdit(null);
-          setFormDirty(false);
-          setActiveMenu(menu);
-        }}
+        onChangeMenu={handleChangeMenu}
         currentUser={currentUser}
         onSignOut={handleSignOut}
       />

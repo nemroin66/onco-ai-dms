@@ -232,7 +232,18 @@ export async function recursivelyDeleteDriveFolder(folderId: string, maxRetries 
 }
 
 export async function wipePatientAssets(patient: any) {
-  const files = (await listCollection("files")).filter((file: any) => file.patientId === patient.id);
+  let files: any[];
+  try {
+    // DB-level filter by patientId — requires composite index on files(patientId)
+    files = await listCollection("files", {
+      where: [{ field: "patientId", op: "==", value: patient.id }],
+      select: ["id", "driveFileId"],
+    });
+  } catch {
+    // Fallback: in-memory filter if index not yet created
+    files = (await listCollection("files", { select: ["id", "driveFileId"] }))
+      .filter((file: any) => file.patientId === patient.id);
+  }
   for (const file of files) {
     if (file.driveFileId) {
       try {
