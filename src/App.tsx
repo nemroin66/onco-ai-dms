@@ -66,8 +66,9 @@ function AppContent() {
    const [deletedPatients, setDeletedPatients] = useState<PatientRecord[]>([]);
    const [allFiles, setAllFiles] = useState<DiskFile[]>([]);
    const [selectedPatient, setSelectedPatient] = useState<PatientRecord | null>(null);
-   const [patientUnderEdit, setPatientUnderEdit] = useState<PatientRecord | null>(null);
-   const [isLoadingMain, setIsLoadingMain] = useState(false);
+    const [patientUnderEdit, setPatientUnderEdit] = useState<PatientRecord | null>(null);
+    const [formDirty, setFormDirty] = useState(false);
+    const [isLoadingMain, setIsLoadingMain] = useState(false);
     const [liveCounts, setLiveCounts] = useState<{ active: number; deleted: number; total: number } | null>(null);
 
 
@@ -374,12 +375,14 @@ function AppContent() {
                initialPatientData={patientUnderEdit}
                onSavePatient={handleSavePatient}
                onNavigateHome={() => {
+                 setFormDirty(false);
                  setPatientUnderEdit(null);
                  setActiveMenu("Home");
                }}
                allExistingFiles={allFiles}
                onUploadFile={handleUploadFile}
                totalPatientsCount={allPatients.length}
+               onDirtyChange={setFormDirty}
              />
 
           </PageTransition>
@@ -453,12 +456,16 @@ function AppContent() {
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         activeMenu={activeMenu}
-        onChangeMenu={(menu) => {
+        onChangeMenu={async (menu) => {
+          // Warn before leaving unsaved form
+          if (formDirty) {
+            const leave = window.confirm("You have unsaved changes. Are you sure you want to leave without saving?");
+            if (!leave) return;
+          }
           // Close patient viewer and discard edits when navigating away
           setSelectedPatient(null);
-          if (menu !== "Add Patient") {
-            setPatientUnderEdit(null);
-          }
+          setPatientUnderEdit(null);
+          setFormDirty(false);
           setActiveMenu(menu);
         }}
         currentUser={currentUser}

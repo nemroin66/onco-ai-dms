@@ -89,6 +89,7 @@ interface AddPatientViewProps {
   allExistingFiles?: DiskFile[];
   onUploadFile?: (file: { name: string; mimeType: string; size: number; patientId: string; contentBase64: string; extracted: boolean }) => Promise<any>;
   totalPatientsCount: number;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 const AI_DOCUMENT_ACCEPT = ".pdf,.csv,.json,.txt,.jpg,.jpeg,.png,.tif,.tiff,.bmp,.webp,image/jpeg,image/png,image/tiff,image/bmp,image/webp,text/plain,text/csv,application/json";
@@ -484,8 +485,42 @@ export default function AddPatientView({
   onNavigateHome,
   allExistingFiles = [],
   onUploadFile,
-  totalPatientsCount
+  totalPatientsCount,
+  onDirtyChange
 }: AddPatientViewProps) {
+
+  const isDirtyRef = React.useRef(false);
+
+  // Warn on browser back/refresh when form is dirty
+  React.useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (isDirtyRef.current) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, []);
+
+  // Mark form dirty on any state change, reset after save
+  const markDirty = React.useCallback(() => {
+    if (!isDirtyRef.current) {
+      isDirtyRef.current = true;
+      onDirtyChange?.(true);
+    }
+  }, [onDirtyChange]);
+
+  const resetDirty = React.useCallback(() => {
+    isDirtyRef.current = false;
+    onDirtyChange?.(false);
+  }, [onDirtyChange]);
+
+  // Confirm before leaving with unsaved changes
+  const handleNavigateHome = React.useCallback(() => {
+    if (isDirtyRef.current && !window.confirm("You have unsaved changes. Are you sure you want to leave without saving?")) return;
+    onNavigateHome();
+  }, [onNavigateHome]);
 
   // Consent checkpoint
   const [consentTaken, setConsentTaken] = useState(initialPatientData ? true : false);
@@ -634,8 +669,8 @@ export default function AddPatientView({
   };
   const [oncologySearch, setOncologySearch] = useState("");
 
-  // Form patient record state
-  const [formState, setFormState] = useState<Partial<PatientRecord>>({
+  // Form patient record state (wrapped setter tracks dirtiness)
+  const [formState, _setFormState] = useState<Partial<PatientRecord>>({
     id: "",
     oncology: OncologyCategory.OTHER,
     oncology_types: [],
@@ -779,6 +814,14 @@ export default function AddPatientView({
     source_file_summaries: [],
     extraction_safety_note: ""
   });
+  // Wrap setFormState to mark form dirty on any change
+  const setFormStateRef = React.useRef(_setFormState);
+  setFormStateRef.current = _setFormState;
+  const setFormState: typeof _setFormState = React.useCallback((updater: any) => {
+    markDirty();
+    setFormStateRef.current(updater);
+  }, [markDirty]);
+
   const selectedOncologyTypes = Array.from(
     new Set([...(formState.oncology_types || []), formState.oncology].filter(Boolean) as string[])
   ).filter((cat) => Object.values(OncologyCategory).includes(cat as OncologyCategory));
@@ -2371,6 +2414,7 @@ export default function AddPatientView({
       setSaveStage("Saved!");
       setSaveSuccess(true);
       await notify("Patient clinical record saved in secure Firestore repository.", "Record Saved", "success");
+      resetDirty();
       setTimeout(() => onNavigateHome(), 700);
     } catch (err) {
       setSaveStage("Save failed");
@@ -2604,7 +2648,7 @@ export default function AddPatientView({
           </div>
         </div>
         <button
-          onClick={onNavigateHome}
+          onClick={handleNavigateHome}
           className="text-xs font-semibold bg-slate-50 border border-natural-border hover:bg-natural-sidebar/90 dark:bg-slate-700 dark:hover:bg-slate-650 text-slate-700 dark:text-slate-300 py-2 px-3 rounded-xl transition duration-150 cursor-pointer self-start sm:self-center"
         >
           Back to Home Page
@@ -10508,7 +10552,7 @@ export default function AddPatientView({
         <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700/80">
           <button
             type="button"
-            onClick={onNavigateHome}
+            onClick={handleNavigateHome}
             className="px-6 py-3 border border-slate-200 dark:border-slate-800 rounded-xl font-semibold text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-850 hover:text-slate-700 dark:hover:text-theme-on-accent transition duration-200 cursor-pointer text-xs hover-lift ripple-on-click"
           >
             Cancel and Discard Changes
