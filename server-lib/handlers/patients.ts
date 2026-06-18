@@ -29,8 +29,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (bhtFilter) where.push({ field: "bht", op: "==", value: bhtFilter });
 
       let patients = await listCollection("patients", { where });
-      patients.sort((a: any, b: any) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
-      patients = patients.slice(0, limit);
 
       if (isSearch) {
         const terms = searchQuery.split(/\s+/).filter(Boolean);
@@ -41,6 +39,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           ].map((v: any) => String(v || "").toLowerCase());
           return terms.every((term: string) => fieldsToSearch.some((f: string) => f.includes(term)));
         });
+      } else {
+        patients.sort((a: any, b: any) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
+        patients = patients.slice(0, limit);
       }
 
       return res.json(patients);
