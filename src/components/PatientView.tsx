@@ -63,7 +63,7 @@ interface SectionWrapperProps {
 const Section = ({ title, icon, sectionKey, openSections, onToggle, children }: SectionWrapperProps) => (
   <div className="minimal-card rounded-2xl overflow-hidden">
     <SectionHeader title={title} icon={icon} isOpen={openSections[sectionKey]} onToggle={() => onToggle(sectionKey)} color={sectionIconColors[sectionKey] || "#64748B"} />
-    {openSections[sectionKey] && <div className="p-5 grid grid-cols-1 md:grid-cols-4 gap-4 text-xs">{children}</div>}
+    {openSections[sectionKey] && <div className="p-5 grid grid-cols-1 lg:grid-cols-4 gap-4 text-xs">{children}</div>}
   </div>
 );
 

@@ -140,8 +140,8 @@ function ColumnTreeRow({
   return (
     <div>
       <div
-        className="flex items-center gap-2 py-1.5 pr-2 text-[11.5px] text-slate-700 dark:text-slate-250 hover:bg-slate-50 dark:hover:bg-slate-900/60 rounded-lg"
-        style={{ paddingLeft: `${depth * 14 + 6}px` }}
+        className="flex items-center gap-2 py-1.5 pr-2 text-[11.5px] text-slate-700 dark:text-slate-250 hover:bg-slate-50 dark:hover:bg-slate-900/60 rounded-lg overflow-hidden"
+        style={{ paddingLeft: `${depth * 10 + 4}px` }}
       >
         <button
           type="button"
@@ -162,11 +162,11 @@ function ColumnTreeRow({
         <button
           type="button"
           onClick={() => hasChildren ? onToggleExpanded(node.path) : onTogglePaths(descendantPaths, !checked)}
-          className="min-w-0 flex-1 text-left"
+          className="min-w-0 flex-1 text-left truncate"
         >
           <span className={`font-semibold ${partial ? "text-natural-accent dark:text-natural-gold" : ""}`}>{label}</span>
           {node.selectable && node.path !== node.label && (
-            <span className="ml-2 text-[10.5px] text-slate-400">{node.path}</span>
+            <span className="ml-2 text-[10.5px] text-slate-400 hidden sm:inline">{node.path}</span>
           )}
         </button>
         {node.repeated && (
@@ -460,7 +460,7 @@ export default function SettingsView({ currentUser, onWipeDatabase, onUpdateUser
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] gap-0 overflow-hidden">
-              <aside className="border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-700 p-4 space-y-4 bg-slate-50/70 dark:bg-slate-950/40">
+              <aside className="border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-700 p-3 lg:p-4 space-y-3 lg:space-y-4 overflow-y-auto bg-slate-50/70 dark:bg-slate-950/40">
                 <div className="space-y-2">
                   <h4 className="text-[11px] uppercase tracking-wide font-bold text-slate-500">Export Mode</h4>
                   <div className="grid grid-cols-2 gap-2">

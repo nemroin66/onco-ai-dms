@@ -45,8 +45,8 @@ export default function Sidebar({ activeMenu, onChangeMenu, currentUser, onSignO
 
   return (
     <>
-      {/* Top bar — visible on all screen sizes */}
-      <div className="flex items-center gap-2 minimal-header px-4 py-3 w-full z-30 transition-colors duration-200">
+      {/* Top bar — visible on mobile/tablet, hidden on desktop */}
+      <div className="flex items-center gap-2 minimal-header px-4 py-3 w-full z-30 transition-colors duration-200 lg:hidden">
         <button
           id="btn-mobile-menu"
           onClick={() => setMenuOpen(!menuOpen)}
@@ -64,10 +64,11 @@ export default function Sidebar({ activeMenu, onChangeMenu, currentUser, onSignO
         <span className="font-bold tracking-tight leading-none" style={{ color: "#2563EB" }}>AI DMS</span>
       </div>
 
-      {/* Sidebar drawer overlay */}
+      {/* Sidebar: drawer on mobile, persistent on lg+ */}
       <aside className={`
-        fixed inset-y-0 left-0 z-50 minimal-sidebar flex flex-col justify-between w-[260px] p-5 drawer-slide-in transition-all duration-200
+        fixed inset-y-0 left-0 z-50 minimal-sidebar flex flex-col justify-between w-[260px] max-w-[85vw] p-5 transition-all duration-200
         ${menuOpen ? "translate-x-0" : "-translate-x-full"}
+        lg:translate-x-0 lg:static lg:z-auto lg:h-screen
       `} style={menuOpen ? undefined : { animation: "none" }}>
         {/* Header Branding */}
         <div>
@@ -80,7 +81,7 @@ export default function Sidebar({ activeMenu, onChangeMenu, currentUser, onSignO
                 <h1 className="font-bold text-base tracking-tight leading-none" style={{ color: "#2563EB" }}>AI DMS</h1>
               </div>
             </div>
-            <button className="text-natural-accent hover:text-natural-accent-dark dark:text-theme-on-accent" onClick={() => setMenuOpen(false)}>
+            <button className="text-natural-accent hover:text-natural-accent-dark dark:text-theme-on-accent lg:hidden" onClick={() => setMenuOpen(false)}>
               <X className="h-5 w-5" />
             </button>
           </div>
@@ -131,11 +132,11 @@ export default function Sidebar({ activeMenu, onChangeMenu, currentUser, onSignO
         </div>
       </aside>
 
-      {/* Backdrop */}
+      {/* Backdrop — mobile only */}
       {menuOpen && (
         <div 
           onClick={() => setMenuOpen(false)} 
-          className="fixed inset-0 bg-slate-950/60 z-40 transition-opacity"
+          className="fixed inset-0 bg-slate-950/60 z-40 transition-opacity lg:hidden"
         />
       )}
     </>

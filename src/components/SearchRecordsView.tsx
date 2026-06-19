@@ -118,7 +118,7 @@ export default function SearchRecordsView({
             onChange={(e) => setPendingSearchQuery(e.target.value)}
             onKeyDown={handleSearchKeyDown}
             placeholder="Search by patient name, BHT, clinic, auto ID, NIC, TP, or hospital..."
-            className="w-full pr-36 pl-11 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 placeholder-slate-400 dark:placeholder-slate-500 rounded-lg focus:border-blue-600 outline-none focus:ring-1 focus:ring-blue-500 transition-all text-xs"
+            className="w-full pr-24 sm:pr-36 pl-11 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 placeholder-slate-400 dark:placeholder-slate-500 rounded-lg focus:border-blue-600 outline-none focus:ring-1 focus:ring-blue-500 transition-all text-[11px] sm:text-xs"
           />
           {searchResults !== null && (
             <button

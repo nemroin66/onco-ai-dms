@@ -287,7 +287,7 @@ export default function DashboardView({ allPatients, currentUser }: DashboardVie
     setResults({});
   };
 
-  const isMobileLayout = mounted && width < 640;
+  const isMobileLayout = mounted && width < 1024;
 
   const onLayoutChange = (layout: Layout) => {
     if (isMobileLayout) return;
@@ -384,20 +384,20 @@ export default function DashboardView({ allPatients, currentUser }: DashboardVie
             onClick={() => setShowStatisticsLab((value) => !value)}
             className={`${showStatisticsLab ? "btn-primary" : "btn-secondary"} px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2`}
           >
-            <FlaskConical className="h-4 w-4" /> Statistics Lab
+            <FlaskConical className="h-4 w-4" /> <span className="hidden sm:inline">Statistics Lab</span>
           </button>
-          <button type="button" onClick={() => setShowBuilder((value) => !value)} className="btn-clr-add btn-secondary px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2"><Plus className="h-4 w-4" /> Add chart</button>
-          <button type="button" onClick={() => runDashboard()} className="btn-primary px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2"><RefreshCw className="h-4 w-4" /> Run</button>
+          <button type="button" onClick={() => setShowBuilder((value) => !value)} className="btn-clr-add btn-secondary px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2"><Plus className="h-4 w-4" /> <span className="hidden sm:inline">Add chart</span></button>
+          <button type="button" onClick={() => runDashboard()} className="btn-primary px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2"><RefreshCw className="h-4 w-4" /> <span className="hidden sm:inline">Run</span></button>
           {cohortCount > 0 && (
-            <span className="text-[11.5px] text-slate-500 font-semibold self-center">{cohortCount} patients analyzed</span>
+            <span className="text-[11.5px] text-slate-500 font-semibold self-center hidden sm:inline">{cohortCount} patients analyzed</span>
           )}
-          <button type="button" onClick={saveCurrentDashboard} className="btn-primary px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2"><Save className="h-4 w-4" /> Save</button>
-          <button type="button" onClick={exportDashboardCsv} className="btn-clr-csv btn-secondary px-3 py-2 rounded-xl text-xs font-bold">CSV</button>
-          <button type="button" onClick={exportDashboardPdf} className="btn-secondary px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2"><Download className="h-4 w-4" /> PDF</button>
+          <button type="button" onClick={saveCurrentDashboard} className="btn-primary px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2"><Save className="h-4 w-4" /> <span className="hidden sm:inline">Save</span></button>
+          <button type="button" onClick={exportDashboardCsv} className="btn-clr-csv btn-secondary px-3 py-2 rounded-xl text-xs font-bold"><span className="hidden sm:inline">CSV</span><span className="sm:hidden"><Download className="h-4 w-4" /></span></button>
+          <button type="button" onClick={exportDashboardPdf} className="btn-secondary px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2"><Download className="h-4 w-4" /> <span className="hidden sm:inline">PDF</span></button>
         </div>
       </header>
 
-      <section className="minimal-card rounded-2xl p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
+      <section className="minimal-card rounded-2xl p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
         <label className="text-[11.5px] font-bold text-slate-500 uppercase">Dashboard
           <select value={dashboard.id} onChange={(event) => selectDashboard(event.target.value)} className="input-field mt-1 w-full">
             <optgroup label="Starter templates">{starters.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</optgroup>
@@ -434,7 +434,7 @@ export default function DashboardView({ allPatients, currentUser }: DashboardVie
       {showBuilder && (
         <section className="minimal-card rounded-2xl p-5 space-y-5">
           <div className="flex items-center gap-2"><BarChart3 className="h-4 w-4" /><h3 className="font-bold text-sm">Chart builder</h3></div>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             <label className="label-form">Title<input value={builder.title} onChange={(event) => setBuilder((current) => ({ ...current, title: event.target.value }))} className="input-field mt-1 w-full" /></label>
             <label className="label-form">Chart type<select value={builder.chartType} onChange={(event) => setBuilder((current) => ({ ...current, chartType: event.target.value as ChartType }))} className="input-field mt-1 w-full">{chartTypes.map((type) => <option key={type} value={type}>{type}</option>)}</select></label>
             <label className="label-form">Scope<select value={builder.scope} onChange={(event) => setBuilder((current) => ({ ...current, scope: event.target.value as "cohort" | "patient" }))} className="input-field mt-1 w-full"><option value="cohort">Cohort</option><option value="patient">Patient</option></select></label>

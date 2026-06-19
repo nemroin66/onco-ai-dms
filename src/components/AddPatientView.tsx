@@ -3174,7 +3174,7 @@ export default function AddPatientView({
 
       {/* AI document understanding point (locked unless consent checkbox is ticked) */}
       <div className={`relative ${!consentTaken ? "opacity-45 cursor-not-allowed select-none" : ""}`}>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
 
           {/* AI Drag Drop upload box */}
           <div className="lg:col-span-2 minimal-card rounded-2xl p-5">
@@ -3599,7 +3599,7 @@ export default function AddPatientView({
           </button>
 
           {openSections.patientIdentifiers && (
-            <div className="p-5 grid grid-cols-1 md:grid-cols-4 gap-4 text-xs text-slate-700 dark:text-slate-350">
+            <div className="p-5 grid grid-cols-1 lg:grid-cols-4 gap-4 text-xs text-slate-700 dark:text-slate-350">
 
               <div>
                 <label className="block font-semibold mb-1 dark:text-slate-400">Auto Generated ID</label>
@@ -3966,7 +3966,7 @@ export default function AddPatientView({
           </button>
 
           {openSections.demographics && (
-            <div className="p-5 grid grid-cols-1 md:grid-cols-4 gap-4 text-xs text-slate-700 dark:text-slate-350">
+            <div className="p-5 grid grid-cols-1 lg:grid-cols-4 gap-4 text-xs text-slate-700 dark:text-slate-350">
 
               {/* Age, DOB, Gender */}
               <div>
@@ -4260,7 +4260,7 @@ export default function AddPatientView({
           </button>
 
           {openSections.hospital && (
-            <div className="p-5 grid grid-cols-1 md:grid-cols-4 gap-4 text-xs text-slate-700 dark:text-slate-350">
+            <div className="p-5 grid grid-cols-1 lg:grid-cols-4 gap-4 text-xs text-slate-700 dark:text-slate-350">
 
               <div>
                 <label className="block font-semibold mb-1 dark:text-slate-400 font-bold">Hospital Name</label>
@@ -4545,7 +4545,7 @@ export default function AddPatientView({
               />
 
               {/* Allergies Block */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 border-t border-natural-border/40 dark:border-slate-800/80 pt-4">
+              <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 border-t border-natural-border/40 dark:border-slate-800/80 pt-4">
                 <div>
                   <label className="block font-semibold mb-1">Food Allergies</label>
                   <input type="text" name="allergy_food" value={formState.allergy_food} onChange={handleInputChange} className="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl" />
@@ -8338,7 +8338,7 @@ export default function AddPatientView({
                           {(row.additional_labs || []).length > 0 && (
                             <div className="space-y-1">
                               {(row.additional_labs || []).map((lab, li) => (
-                                <div key={li} className="grid grid-cols-[1fr_1fr_0.7fr_0.7fr_auto] gap-1 items-center">
+                                <div key={li} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_0.7fr_0.7fr_auto] gap-1 items-center">
                                   <input type="text" value={lab.test_name} onChange={(e) => updateLabRow(li, "test_name", e.target.value)} placeholder="Test name" className="p-1 bg-theme-surface dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-[11.5px]" />
                                   <input type="text" value={lab.result} onChange={(e) => updateLabRow(li, "result", e.target.value)} placeholder="Result" className="p-1 bg-theme-surface dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-[11.5px]" />
                                   <input type="text" value={lab.unit} onChange={(e) => updateLabRow(li, "unit", e.target.value)} placeholder="Unit" className="p-1 bg-theme-surface dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-[11.5px]" />
@@ -8384,7 +8384,7 @@ export default function AddPatientView({
                           {(row.additional_imaging || []).length > 0 && (
                             <div className="space-y-1">
                               {(row.additional_imaging || []).map((img, ii) => (
-                                <div key={ii} className="grid grid-cols-[1.2fr_0.8fr_1fr_auto] gap-1 items-center">
+                                <div key={ii} className="grid grid-cols-1 sm:grid-cols-[1.2fr_0.8fr_1fr_auto] gap-1 items-center">
                                   <select value={img.imaging_type} onChange={(e) => updateImagingRow(ii, "imaging_type", e.target.value)} className="p-1 bg-theme-surface dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-[11.5px]">
                                     <option value="">Select modality</option>
                                     {["CT Chest/Abdomen/Pelvis", "CT Chest", "CT Abdomen/Pelvis", "MRI", "PET-CT", "PET-MRI", "Ultrasound", "Mammography", "Bone Scan", "X-Ray", "Other"].map((opt) => <option key={opt} value={opt}>{opt}</option>)}

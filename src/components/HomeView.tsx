@@ -137,7 +137,7 @@ export default function HomeView({
 
       <div className="w-full px-6 text-left lg:px-8">
         <h3 className="text-base font-bold text-slate-800 dark:text-theme-on-accent mb-3">Quick Navigation Shortcuts</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 
           {([
              {
@@ -266,10 +266,10 @@ export default function HomeView({
                 <tr className="h-table-col">
                   <th className="py-3 px-5">Reg ID</th>
                   <th className="py-3 px-5">Patient Name</th>
-                  <th className="py-3 px-5">Gender / Age</th>
+                  <th className="py-3 px-5 hidden sm:table-cell">Gender / Age</th>
                   <th className="py-3 px-5">Oncology Category</th>
                   <th className="py-3 px-5">Active Status</th>
-                  <th className="py-3 px-5">Last Updated</th>
+                  <th className="py-3 px-5 hidden sm:table-cell">Last Updated</th>
                   <th className="py-3 px-5 text-right">Actions</th>
                 </tr>
               </thead>
@@ -288,18 +288,18 @@ export default function HomeView({
                         {patientName}
                       </span>
                     </td>
-                    <td className="py-3 px-5 capitalize">{pat.gender || "N/A"} • {pat.age || "N/A"} yrs</td>
+                    <td className="py-3 px-5 capitalize hidden sm:table-cell">{pat.gender || "N/A"} • {pat.age || "N/A"} yrs</td>
                     <td className="py-3 px-5">
                       <span className="bg-natural-accent/10 dark:bg-natural-accent/20 text-natural-accent-dark dark:text-natural-hover font-semibold py-0.5 px-2 rounded-md border border-natural-accent/20">
                         {oncology}
                       </span>
                     </td>
                     <td className="py-3 px-5">
-                      <span className={`eyebrow px-2.5 py-0.5 rounded-full ${getStatusBadgeClass(status)}`}>
+                      <span className={`eyebrow px-2.5 py-0.5 rounded-full truncate max-w-[120px] inline-block ${getStatusBadgeClass(status)}`}>
                         {status.replace("_", " ")}
                       </span>
                     </td>
-                    <td className="py-3 px-5 text-slate-650 dark:text-slate-300 ">
+                    <td className="py-3 px-5 text-slate-650 dark:text-slate-300 hidden sm:table-cell">
                       {updatedAt}
                     </td>
                     <td className="py-3 px-5 text-right space-x-1.5 whitespace-nowrap">
@@ -310,7 +310,7 @@ export default function HomeView({
                         title="View Detailed Dossier"
                       >
                         <Eye className="h-3 w-3" />
-                        <span>View</span>
+                        <span className="hidden sm:inline">View</span>
                       </button>
                       <button
                         id={`btn-home-edit-${pat.id}`}
@@ -319,7 +319,7 @@ export default function HomeView({
                         title="Edit Records"
                       >
                         <Edit className="h-3 w-3" />
-                        <span>Edit</span>
+                        <span className="hidden sm:inline">Edit</span>
                       </button>
                       <button
                         id={`btn-home-delete-${pat.id}`}
@@ -328,7 +328,7 @@ export default function HomeView({
                         title="Delete Patient Record"
                       >
                         <Trash2 className="h-3 w-3" />
-                        <span>Delete</span>
+                        <span className="hidden sm:inline">Delete</span>
                       </button>
                     </td>
                   </tr>

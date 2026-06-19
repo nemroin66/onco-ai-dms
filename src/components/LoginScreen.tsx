@@ -199,7 +199,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
   return (
     <div className="min-h-screen bg-natural-bg dark:bg-natural-bg flex flex-col justify-center py-12 sm:px-6 lg:px-8 transition-colors duration-200 relative overflow-hidden page-fade-in">
       
-      <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
+      <div className="sm:mx-auto sm:w-full sm:max-w-md lg:max-w-lg relative z-10">
         <div className="flex justify-center">
           <div className="h-16 w-16 rounded-2xl flex items-center justify-center text-white shadow-md border border-theme-highlight/10" style={{ backgroundColor: "#2563EB" }}>
             <Activity className="h-10 w-10 animate-pulse" />
@@ -213,7 +213,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
         </p>
       </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10 px-4 sm:px-0">
+      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md lg:max-w-lg relative z-10 px-4 sm:px-0">
         <div className="minimal-card py-8 px-6 sm:px-10 rounded-3xl">
           
           {/* Status Indicators */}
