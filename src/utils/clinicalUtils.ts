@@ -198,7 +198,7 @@ export function interpretNumericValue(value: string, low: number, high: number, 
   return { text: `Borderline ${dir}${unit ? ' ' + unit : ''}`, severity: 'borderline' };
 }
 
-const SELECT_SEVERITY: Record<string, Record<string, Severity>> = {
+export const SELECT_SEVERITY: Record<string, Record<string, Severity>> = {
   surgical_candidacy: {
     "Candidate — planned": 'normal',
     "Already resected": 'normal',

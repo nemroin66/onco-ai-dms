@@ -100,6 +100,7 @@ import {
   ANATOMICAL_SUBSITES,
   HISTOLOGY_TYPES,
   getHistologyTypes,
+  SELECT_SEVERITY,
 } from "../utils/clinicalUtils";
 import SubTable, { type SubTableProps } from "./SubTable";
 
