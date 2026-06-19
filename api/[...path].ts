@@ -16,8 +16,7 @@ import users from "../server-lib/handlers/users.js";
 import { vercelAuth } from "../server-lib/auth.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const rawPath = req.query.path;
-  const parts = (Array.isArray(rawPath) ? rawPath : String(rawPath || "").split("/")).filter(Boolean);
+  const parts = (req.url || "").split("?")[0].replace(/^\/api\/?/, "").split("/").filter(Boolean);
   const route = parts.join("/");
 
   if (route === "favicon.ico") return res.status(204).end();
