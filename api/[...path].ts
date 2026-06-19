@@ -14,21 +14,17 @@ import quota from "../server-lib/handlers/quota.js";
 import analytics from "../server-lib/handlers/analytics.js";
 import users from "../server-lib/handlers/users.js";
 import { vercelAuth } from "../server-lib/auth.js";
+import { isTrashHandlerRoute, parseApiRoute, requiresAdminRoute } from "../server-lib/api-routing.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const url = new URL(req.url!, `https://${req.headers.host}`);
-  const parts = url.pathname.replace(/^\/api\/?/, "").split("/").filter(Boolean);
-  const route = parts.join("/");
+  const { parts, route } = parseApiRoute(req.url!, req.headers.host);
 
   if (route === "favicon.ico") return res.status(204).end();
 
   const user = await vercelAuth(req, res);
   if (!user) return;
 
-  if (
-    (route === "patients/trash" && req.method === "POST")
-    || (parts[0] === "patients" && parts[2] === "permanent")
-  ) {
+  if (requiresAdminRoute(route, parts, req.method)) {
     if (user.role !== "admin") {
       console.error("[admin] Access denied: user role is", user.role);
       return res.status(403).json({ error: "Administrator access required." });
@@ -48,7 +44,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return patientExport(req, res);
   }
   if (route === "patients/export") return patientExport(req, res);
-  if (route === "patients/trash") return trash(req, res);
+  if (isTrashHandlerRoute(route)) return trash(req, res);
   if (route === "patients/count") return count(req, res);
   if (route === "storage") return storage(req, res);
 

@@ -29,7 +29,6 @@ import {
 } from "lucide-react";
 import { apiFetch, apiFetchJson } from "../lib/api-client";
 import { confirmDialog, notify } from "./AppDialog";
-import { apiFetchJson } from "../lib/api-client";
 import { useTheme } from "./ThemeProvider";
 
 interface SettingsViewProps {
