@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { analyticsCatalog } from "../src/analytics/catalog.js";
-import { chartSpecSchema, statisticalAnalysisSchema } from "../src/analytics/types.js";
+import { chartSpecSchema, statisticalAnalysisSchema } from "../src/analytics/schemas.js";
 import { analyzeStatisticalRows, descriptiveStats, kaplanMeier } from "../server-lib/analytics.js";
 import { inferStatisticalSpec } from "../server-lib/analytics-prompt.js";
 

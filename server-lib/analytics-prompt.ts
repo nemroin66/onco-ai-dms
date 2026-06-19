@@ -3,6 +3,8 @@ import { analyticsCatalog, analyticsFieldMap } from "../src/analytics/catalog.js
 import {
   chartSpecSchema,
   statisticalAnalysisSchema,
+} from "../src/analytics/schemas.js";
+import {
   type ChartSpec,
   type StatisticalAnalysisSpec,
   type StatisticalMethod,

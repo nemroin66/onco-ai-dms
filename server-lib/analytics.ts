@@ -4,6 +4,8 @@ import {
   chartSpecSchema,
   dashboardSchema,
   statisticalAnalysisSchema,
+} from "../src/analytics/schemas.js";
+import {
   type AnalyticsDashboard,
   type AnalyticsPoint,
   type AnalyticsResult,

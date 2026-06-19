@@ -1,5 +1,3 @@
-import { z } from "zod";
-
 export const chartTypes = [
   "kpi",
   "table",
@@ -30,75 +28,55 @@ export const statisticalMethods = [
   "kruskal-wallis",
 ] as const;
 
-export const filterSchema = z.object({
-  field: z.string().min(1),
-  operator: z.enum(["eq", "neq", "in", "contains", "gt", "gte", "lt", "lte", "between", "exists"]),
-  value: z.unknown().optional(),
-});
-
-export const chartSpecSchema = z.object({
-  id: z.string().min(1).default(() => crypto.randomUUID()),
-  title: z.string().min(1).max(120),
-  scope: z.enum(["cohort", "patient"]).default("cohort"),
-  patientId: z.string().optional(),
-  chartType: z.enum(chartTypes),
-  analysisUnit: z.enum(["patient", "event"]).default("patient"),
-  dimension: z.string().optional(),
-  measure: z.string().default("patient.count"),
-  aggregation: z.enum(["count", "sum", "mean", "median", "min", "max", "percentage"]).default("count"),
-  groupBy: z.string().optional(),
-  filters: z.array(filterSchema).default([]),
-  statistic: z.enum([
-    "none",
-    "descriptive",
-    "pearson",
-    "spearman",
-    "chi-square",
-    "fisher-exact",
-    "welch-t",
-    "mann-whitney",
-    "welch-anova",
-    "kruskal-wallis",
-    "log-rank",
-  ]).default("descriptive"),
-  sort: z.enum(["label-asc", "label-desc", "value-asc", "value-desc"]).default("value-desc"),
-  limit: z.number().int().min(1).max(100).default(30),
-  color: z.string().default("#16a34a"),
-  dateFrom: z.string().optional(),
-  dateTo: z.string().optional(),
-  layout: z.object({
-    x: z.number().int().min(0).default(0),
-    y: z.number().int().min(0).default(0),
-    w: z.number().int().min(2).max(12).default(6),
-    h: z.number().int().min(2).max(12).default(5),
-  }).default({ x: 0, y: 0, w: 6, h: 5 }),
-});
-
-export const dashboardSchema = z.object({
-  id: z.string().min(1),
-  name: z.string().min(1).max(80),
-  description: z.string().max(240).default(""),
-  charts: z.array(chartSpecSchema).max(24),
-  createdAt: z.string().optional(),
-  updatedAt: z.string().optional(),
-});
-
-export const statisticalAnalysisSchema = z.object({
-  title: z.string().min(1).max(120).default("Advanced statistical analysis"),
-  method: z.enum(statisticalMethods),
-  analysisUnit: z.enum(["patient", "event"]).default("patient"),
-  outcome: z.string().min(1),
-  predictor: z.string().optional(),
-  filters: z.array(filterSchema).default([]),
-  dateFrom: z.string().optional(),
-  dateTo: z.string().optional(),
-});
-
 export type ChartType = typeof chartTypes[number];
-export type ChartSpec = z.infer<typeof chartSpecSchema>;
-export type AnalyticsDashboard = z.infer<typeof dashboardSchema>;
 export type StatisticalMethod = typeof statisticalMethods[number];
-export type StatisticalAnalysisSpec = z.infer<typeof statisticalAnalysisSchema>;
+
+export interface AnalyticsFilter {
+  field: string;
+  operator: "eq" | "neq" | "in" | "contains" | "gt" | "gte" | "lt" | "lte" | "between" | "exists";
+  value?: unknown;
+}
+
+export interface ChartSpec {
+  id: string;
+  title: string;
+  scope: "cohort" | "patient";
+  patientId?: string;
+  chartType: ChartType;
+  analysisUnit: "patient" | "event";
+  dimension?: string;
+  measure: string;
+  aggregation: "count" | "sum" | "mean" | "median" | "min" | "max" | "percentage";
+  groupBy?: string;
+  filters: AnalyticsFilter[];
+  statistic: StatisticalMethod | "none" | "log-rank";
+  sort: "label-asc" | "label-desc" | "value-asc" | "value-desc";
+  limit: number;
+  color: string;
+  dateFrom?: string;
+  dateTo?: string;
+  layout: { x: number; y: number; w: number; h: number };
+}
+
+export interface AnalyticsDashboard {
+  id: string;
+  name: string;
+  description: string;
+  charts: ChartSpec[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface StatisticalAnalysisSpec {
+  title: string;
+  method: StatisticalMethod;
+  analysisUnit: "patient" | "event";
+  outcome: string;
+  predictor?: string;
+  filters: AnalyticsFilter[];
+  dateFrom?: string;
+  dateTo?: string;
+}
 
 export interface AnalyticsField {
   path: string;
