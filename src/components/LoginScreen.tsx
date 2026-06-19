@@ -167,7 +167,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                   type="button"
                   onClick={handleAcceptAndClose}
                   className="w-full sm:w-auto px-5 py-2.5 text-white rounded-xl text-xs font-bold shadow-md transition-colors cursor-pointer text-center"
-                  style={{ backgroundColor: "#4F46E5" }}
+                  style={{ backgroundColor: "#2563EB" }}
                 >
                   I Confirm & Accept
                 </button>
@@ -175,8 +175,8 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                   type="button"
                   onClick={() => setShowAgreementView(false)}
                   className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5"
-                  style={{ border: "1px solid #4F46E5", color: "#4F46E5", backgroundColor: "transparent" }}
-                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#4F46E510"; }}
+                  style={{ border: "1px solid #2563EB", color: "#2563EB", backgroundColor: "transparent" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#2563EB10"; }}
                   onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
                 >
                   <ArrowLeft className="h-3.5 w-3.5" />
@@ -201,11 +201,11 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
       
       <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
         <div className="flex justify-center">
-          <div className="h-16 w-16 rounded-2xl flex items-center justify-center text-white shadow-md border border-theme-highlight/10" style={{ backgroundColor: "#4F46E5" }}>
+          <div className="h-16 w-16 rounded-2xl flex items-center justify-center text-white shadow-md border border-theme-highlight/10" style={{ backgroundColor: "#2563EB" }}>
             <Activity className="h-10 w-10 animate-pulse" />
           </div>
         </div>
-        <h2 className="mt-6 text-center text-3xl font-bold tracking-tight" style={{ color: "#4F46E5" }}>
+        <h2 className="mt-6 text-center text-3xl font-bold tracking-tight" style={{ color: "#2563EB" }}>
           AI DMS
         </h2>
         <p className="mt-2 text-center text-sm text-slate-500 dark:text-slate-400 font-semibold">
@@ -269,7 +269,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
               size="lg"
               fullWidth
               className="border-transparent text-white"
-              style={{ backgroundColor: "#4F46E5" }}
+              style={{ backgroundColor: "#2563EB" }}
             >
               Access Clinical Center
             </AnimatedButton>
@@ -294,7 +294,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                     type="button"
                     onClick={() => setAgreed(true)}
                     className="px-4 py-1.5 text-white rounded-lg text-xs font-bold transition-colors"
-                    style={{ backgroundColor: "#8B5CF6" }}
+                    style={{ backgroundColor: "#2563EB" }}
                   >
                     I Agree to Terms
                   </button>
@@ -307,7 +307,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                     setShowAgreementView(true);
                   }}
                   className="font-semibold underline cursor-pointer focus:outline-none relative z-50 text-[11.5px]"
-                  style={{ color: "#8B5CF6" }}
+                  style={{ color: "#2563EB" }}
                 >
                   View User Agreement
                 </button>

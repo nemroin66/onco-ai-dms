@@ -1302,7 +1302,7 @@ export default function PatientDetailsModal({
 	                      type="button"
 	                      onClick={() => fileInputRef2.current?.click()}
 	                      disabled={isUploading}
-                    className="mt-4 inline-flex items-center gap-2 bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-bold text-xs py-2 px-4 rounded-xl transition disabled:opacity-60"
+                    className="mt-4 inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs py-2 px-4 rounded-xl transition disabled:opacity-60"
                   >
                     {isUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
                     <span>{isUploading ? "Uploading..." : "Upload to Drive"}</span>

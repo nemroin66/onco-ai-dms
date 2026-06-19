@@ -108,7 +108,7 @@ export default function TrashView({
 
       {/* Main List */}
       {!trashLoaded ? (
-        <div className="minimal-card rounded-lg py-16 px-4 text-center space-y-4 bg-white">
+        <div className="minimal-card rounded-lg py-16 px-4 text-center space-y-4">
           <div className="flex justify-center">
             <div className="h-16 w-16 bg-blue-50 dark:bg-blue-950/30 rounded-full flex items-center justify-center">
               <Trash2 className="h-8 w-8 text-blue-600 dark:text-blue-300" />

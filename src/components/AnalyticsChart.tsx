@@ -71,7 +71,7 @@ function chartOption(result: AnalyticsResult) {
   const labels = [...new Set(series.map((point) => point.label))];
   const base = {
     animationDuration: 500,
-    color: [spec.color, "#a78b65", "#6b8fa3", "#9c6f7d", "#80996b"],
+    color: ["#2563eb", "#16a34a", "#dc2626"],
     tooltip: { trigger: "axis" as const, confine: true },
     grid: { left: 20, right: 20, top: 28, bottom: 32, containLabel: true },
     textStyle: { fontFamily: "Inter, system-ui, sans-serif", color: "#64748b" },

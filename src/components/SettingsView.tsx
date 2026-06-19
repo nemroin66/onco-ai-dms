@@ -31,6 +31,7 @@ import { apiFetch, apiFetchJson } from "../lib/api-client";
 import { confirmDialog, notify } from "./AppDialog";
 import { doc, setDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { useTheme } from "./ThemeProvider";
 
 interface SettingsViewProps {
   currentUser: { uid?: string; name: string; role: string; email?: string };
@@ -188,6 +189,7 @@ function ColumnTreeRow({
 }
 
 export default function SettingsView({ currentUser, onWipeDatabase, onUpdateUser }: SettingsViewProps) {
+  const { themeMode, setThemeMode } = useTheme();
   
   // Profile editing state
   const [displayName, setDisplayName] = useState(currentUser.name);
@@ -209,11 +211,6 @@ export default function SettingsView({ currentUser, onWipeDatabase, onUpdateUser
     }
   };
 
-  // Theme state
-  const [themeMode, setThemeMode] = useState<"system" | "light" | "dark">(() => {
-    return (localStorage.getItem("theme") as "system" | "light" | "dark") || "light";
-  });
-
   const [quotaRemaining, setQuotaRemaining] = useState(0);
   const [totalQuota, setTotalQuota] = useState(1500);
   const [resetDate, setResetDate] = useState(() => {
@@ -233,15 +230,6 @@ export default function SettingsView({ currentUser, onWipeDatabase, onUpdateUser
   const [csvSearch, setCsvSearch] = useState("");
   const [csvExportMode, setCsvExportMode] = useState<CsvExportMode>("patient-wide");
   const [csvTableRowSource, setCsvTableRowSource] = useState("");
-
-  // Trigger Theme change
-  const handleToggleTheme = (mode: "system" | "light" | "dark") => {
-    setThemeMode(mode);
-    const useDark = mode === "dark" || (mode === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
-    document.documentElement.classList.toggle("dark", useDark);
-    document.documentElement.dataset.themeMode = mode;
-    localStorage.setItem("theme", mode);
-  };
 
   const selectedCsvSet = useMemo(() => new Set(selectedCsvColumns), [selectedCsvColumns]);
   const expandedCsvSet = useMemo(() => new Set(expandedCsvNodes), [expandedCsvNodes]);
@@ -645,10 +633,12 @@ export default function SettingsView({ currentUser, onWipeDatabase, onUpdateUser
                 <h4 className="h-subsection-sm mb-2">1. Interface Mode</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <button
-                    onClick={() => handleToggleTheme("system")}
+                    type="button"
+                    aria-pressed={themeMode === "system"}
+                    onClick={() => setThemeMode("system")}
                     className={`p-3.5 flex flex-col items-center gap-2 rounded-xl border transition cursor-pointer select-none text-center ${
                       themeMode === "system"
-                        ? "bg-natural-accent/10 border-natural-accent text-natural-accent-dark dark:text-natural-bg font-bold"
+                        ? "bg-blue-50 dark:bg-blue-950/30 border-blue-600 dark:border-blue-400 text-blue-700 dark:text-blue-300 font-bold"
                         : "bg-slate-50 dark:bg-slate-900 border-slate-200 hover:border-slate-300 dark:border-slate-800 text-slate-700 dark:text-slate-200 font-bold"
                     }`}
                   >
@@ -656,10 +646,12 @@ export default function SettingsView({ currentUser, onWipeDatabase, onUpdateUser
                     <span className="text-[11.5px]">System Default</span>
                   </button>
                   <button
-                    onClick={() => handleToggleTheme("light")}
+                    type="button"
+                    aria-pressed={themeMode === "light"}
+                    onClick={() => setThemeMode("light")}
                     className={`p-3.5 flex flex-col items-center gap-2 rounded-xl border transition cursor-pointer select-none text-center ${
                       themeMode === "light"
-                        ? "bg-natural-accent/10 border-natural-accent text-natural-accent-dark dark:text-natural-bg font-bold"
+                        ? "bg-blue-50 dark:bg-blue-950/30 border-blue-600 dark:border-blue-400 text-blue-700 dark:text-blue-300 font-bold"
                         : "bg-slate-50 dark:bg-slate-900 border-slate-200 hover:border-slate-300 dark:border-slate-800 text-slate-700 dark:text-slate-200 font-bold"
                     }`}
                   >
@@ -668,10 +660,12 @@ export default function SettingsView({ currentUser, onWipeDatabase, onUpdateUser
                   </button>
  
                   <button
-                    onClick={() => handleToggleTheme("dark")}
+                    type="button"
+                    aria-pressed={themeMode === "dark"}
+                    onClick={() => setThemeMode("dark")}
                     className={`p-3.5 flex flex-col items-center gap-2 rounded-xl border transition cursor-pointer select-none text-center ${
                       themeMode === "dark"
-                        ? "bg-natural-accent/20 border-natural-accent text-theme-on-accent font-bold"
+                        ? "bg-blue-50 dark:bg-blue-950/30 border-blue-600 dark:border-blue-400 text-blue-700 dark:text-blue-300 font-bold"
                         : "bg-slate-50 dark:bg-slate-900 border-slate-200 hover:border-slate-300 dark:border-slate-800 text-slate-700 dark:text-slate-200 font-bold"
                     }`}
                   >

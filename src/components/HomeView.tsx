@@ -145,14 +145,14 @@ export default function HomeView({
                title: "Add Patient",
                icon: UserPlus,
                target: "Add Patient" as const,
-               color: "#8B5CF6",
+               color: "#2563EB",
              },
              {
                id: "shortcut-search",
                title: "Search Records",
                icon: Search,
                target: "Search Records" as const,
-               color: "#06B6D4",
+               color: "#2563EB",
              },
              {
                id: "shortcut-dashboard",
@@ -166,7 +166,7 @@ export default function HomeView({
                title: "System Settings",
                icon: Settings,
                target: "Settings" as const,
-               color: "#F59E0B",
+               color: "#2563EB",
              },
            ]).map((s) => {
 

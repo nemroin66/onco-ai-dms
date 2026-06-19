@@ -25,14 +25,14 @@ const DL = ({ label, value, fullWidth = false }: { label: string; value: string 
 
 const sectionIconColors: Record<string, string> = {
   summary: "#10B981",
-  patientIdentifiers: "#3B82F6", demographics: "#6B7280", oncology: "#8B5CF6",
-  hospital: "#14B8A6", history: "#6366F1", clinicalAssessment: "#6366F1",
-  anthropometric: "#14B8A6", examination: "#14B8A6", provisionalDiagnosis: "#F59E0B",
-  definitiveDiagnosis: "#10B981", investigations: "#3B82F6", tumorCharacteristics: "#8B5CF6",
-  clinicalStaging: "#10B981", histologyGrading: "#14B8A6", adjuvantTherapy: "#EC4899",
-  preOperativeAssessment: "#14B8A6", definitiveSurgery: "#0EA5E9", treatmentOutcome: "#F59E0B",
-  afterSurgicalTherapies: "#8B5CF6", followUpPrognosis: "#14B8A6", oncologicalOutcome: "#F59E0B",
-  supplementary: "#F59E0B",
+  patientIdentifiers: "#3B82F6", demographics: "#64748B", oncology: "#2563EB",
+  hospital: "#10B981", history: "#2563EB", clinicalAssessment: "#2563EB",
+  anthropometric: "#10B981", examination: "#10B981", provisionalDiagnosis: "#DC2626",
+  definitiveDiagnosis: "#10B981", investigations: "#3B82F6", tumorCharacteristics: "#2563EB",
+  clinicalStaging: "#10B981", histologyGrading: "#10B981", adjuvantTherapy: "#DC2626",
+  preOperativeAssessment: "#10B981", definitiveSurgery: "#2563EB", treatmentOutcome: "#DC2626",
+  afterSurgicalTherapies: "#2563EB", followUpPrognosis: "#10B981", oncologicalOutcome: "#DC2626",
+  supplementary: "#DC2626",
 };
 
 const SectionHeader = ({ title, icon: Icon, isOpen, onToggle, color }: { title: string; icon: React.ElementType; isOpen: boolean; onToggle: () => void; color: string }) => (
@@ -62,7 +62,7 @@ interface SectionWrapperProps {
 
 const Section = ({ title, icon, sectionKey, openSections, onToggle, children }: SectionWrapperProps) => (
   <div className="minimal-card rounded-2xl overflow-hidden">
-    <SectionHeader title={title} icon={icon} isOpen={openSections[sectionKey]} onToggle={() => onToggle(sectionKey)} color={sectionIconColors[sectionKey] || "#6B7280"} />
+    <SectionHeader title={title} icon={icon} isOpen={openSections[sectionKey]} onToggle={() => onToggle(sectionKey)} color={sectionIconColors[sectionKey] || "#64748B"} />
     {openSections[sectionKey] && <div className="p-5 grid grid-cols-1 md:grid-cols-4 gap-4 text-xs">{children}</div>}
   </div>
 );

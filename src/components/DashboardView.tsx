@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useState } from "react";
 import {
   BarChart3,
   Bot,
+  Check,
   Download,
   FlaskConical,
   LayoutDashboard,
@@ -32,6 +33,13 @@ interface DashboardViewProps {
   currentUser: UserAccount;
 }
 
+const CHART_COLORS = ["#2563eb", "#16a34a", "#dc2626"] as const;
+
+function normalizeChartColor(color: string): (typeof CHART_COLORS)[number] {
+  const normalized = color.toLowerCase();
+  return CHART_COLORS.find((candidate) => candidate === normalized) || CHART_COLORS[0];
+}
+
 const newId = (prefix: string) => `${prefix}_${crypto.randomUUID()}`;
 
 function baseChart(title: string, dimension: string | undefined, chartType: ChartType = "bar"): ChartSpec {
@@ -48,7 +56,7 @@ function baseChart(title: string, dimension: string | undefined, chartType: Char
     statistic: chartType === "kaplan-meier" ? "log-rank" : "descriptive",
     sort: "value-desc",
     limit: 20,
-    color: "#5f7567",
+    color: "#16a34a",
     layout: { x: 0, y: 0, w: 6, h: 5 },
   };
 }
@@ -126,7 +134,7 @@ const emptyBuilder = () => ({
   groupBy: "",
   statistic: "descriptive" as ChartSpec["statistic"],
   sort: "value-desc" as ChartSpec["sort"],
-  color: "#5f7567",
+  color: "#16a34a",
   filterField: "",
   filterOperator: "eq" as ChartSpec["filters"][number]["operator"],
   filterValue: "",
@@ -235,11 +243,12 @@ export default function DashboardView({ allPatients, currentUser }: DashboardVie
   });
 
   const addChart = async (chart = chartFromBuilder()) => {
-    const nextDashboard = { ...dashboard, charts: [...dashboard.charts, chart] };
+    const normalizedChart = { ...chart, color: normalizeChartColor(chart.color) };
+    const nextDashboard = { ...dashboard, charts: [...dashboard.charts, normalizedChart] };
     setDashboard(nextDashboard);
     setShowBuilder(false);
     setProposed(null);
-    await runChart(chart);
+    await runChart(normalizedChart);
   };
 
   const promptBuilder = async () => {
@@ -439,7 +448,25 @@ export default function DashboardView({ allPatients, currentUser }: DashboardVie
             <label className="label-form">Filter field<select value={builder.filterField} onChange={(event) => setBuilder((current) => ({ ...current, filterField: event.target.value }))} className="input-field mt-1 w-full"><option value="">No filter</option>{fields.map((field) => <option key={field.path} value={field.path}>{field.label}</option>)}</select></label>
             <label className="label-form">Filter operator<select value={builder.filterOperator} onChange={(event) => setBuilder((current) => ({ ...current, filterOperator: event.target.value as ChartSpec["filters"][number]["operator"] }))} className="input-field mt-1 w-full">{["eq", "neq", "contains", "gt", "gte", "lt", "lte", "exists"].map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
             <label className="label-form">Filter value<input value={builder.filterValue} onChange={(event) => setBuilder((current) => ({ ...current, filterValue: event.target.value }))} className="input-field mt-1 w-full" /></label>
-            <label className="label-form">Color<input type="color" value={builder.color} onChange={(event) => setBuilder((current) => ({ ...current, color: event.target.value }))} className="input-field mt-1 w-full h-10" /></label>
+            <fieldset className="label-form">
+              <legend>Color</legend>
+              <div className="mt-1 flex h-10 items-center gap-2">
+                {CHART_COLORS.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    aria-label={`Use ${color === CHART_COLORS[0] ? "blue" : color === CHART_COLORS[1] ? "green" : "red"}`}
+                    aria-pressed={builder.color.toLowerCase() === color}
+                    title={color === CHART_COLORS[0] ? "Blue" : color === CHART_COLORS[1] ? "Green" : "Red"}
+                    onClick={() => setBuilder((current) => ({ ...current, color }))}
+                    className="flex h-9 w-9 items-center justify-center rounded-lg border-2 border-transparent text-white transition focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900"
+                    style={{ backgroundColor: color, borderColor: builder.color.toLowerCase() === color ? "currentColor" : "transparent" }}
+                  >
+                    {builder.color.toLowerCase() === color && <Check className="h-4 w-4" />}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
           </div>
           <div className="flex justify-end"><button type="button" onClick={() => addChart()} className="btn-primary px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2"><Plus className="h-4 w-4" /> Add analysis</button></div>
 

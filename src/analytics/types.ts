@@ -63,7 +63,7 @@ export const chartSpecSchema = z.object({
   ]).default("descriptive"),
   sort: z.enum(["label-asc", "label-desc", "value-asc", "value-desc"]).default("value-desc"),
   limit: z.number().int().min(1).max(100).default(30),
-  color: z.string().default("#5f7567"),
+  color: z.string().default("#16a34a"),
   dateFrom: z.string().optional(),
   dateTo: z.string().optional(),
   layout: z.object({

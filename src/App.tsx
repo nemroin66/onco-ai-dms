@@ -16,6 +16,7 @@ import SettingsView from "./components/SettingsView";
 import TrashView from "./components/TrashView";
 import { AppDialogProvider, confirmDialog, notify } from "./components/AppDialog";
 import PageTransition from "./components/PageTransition";
+import { ThemeProvider } from "./components/ThemeProvider";
 import type { DiskFile, PatientRecord, UserAccount } from "./types";
 
 const DashboardView = React.lazy(() => import("./components/DashboardView"));
@@ -63,14 +64,6 @@ function AppContent() {
   const fetchReqIdRef = useRef(0);
   const fileFetchReqIdRef = useRef(0);
   const trashFetchReqIdRef = useRef(0);
-
-
-  // Force Matte Light as default — ignores browser/OS/prefers-color-scheme.
-  useEffect(() => {
-    const mode = localStorage.getItem("theme") || "light";
-    document.documentElement.classList.toggle("dark", mode === "dark");
-    document.documentElement.dataset.themeMode = mode;
-  }, []);
 
   const handleRefreshCounts = useCallback(async () => {
     try {
@@ -491,7 +484,7 @@ function AppContent() {
   };
 
   return (
-    <div className="min-h-screen max-w-full overflow-x-hidden bg-white text-slate-900 transition-colors duration-200 flex flex-col antialiased relative">
+    <div className="min-h-screen max-w-full overflow-x-hidden bg-natural-bg text-slate-900 dark:text-slate-100 transition-colors duration-200 flex flex-col antialiased relative">
       {/* Sidebar Navigation */}
       <Sidebar
         activeMenu={activeMenu}
@@ -513,8 +506,10 @@ function AppContent() {
 
 export default function App() {
   return (
-    <AppDialogProvider>
-      <AppContent />
-    </AppDialogProvider>
+    <ThemeProvider>
+      <AppDialogProvider>
+        <AppContent />
+      </AppDialogProvider>
+    </ThemeProvider>
   );
 }

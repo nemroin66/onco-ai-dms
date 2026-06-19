@@ -16,9 +16,9 @@ export interface AnimatedButtonProps extends Omit<React.ButtonHTMLAttributes<HTM
 
 const VARIANT_CLASSES: Record<NonNullable<AnimatedButtonProps["variant"]>, string> = {
   primary: "bg-natural-accent hover:bg-natural-accent-dark text-theme-on-accent border-transparent",
-  secondary: "bg-theme-surface dark:bg-natural-card hover:bg-slate-50 dark:hover:bg-natural-hover text-slate-700 border-natural-border dark:border-natural-border",
+  secondary: "bg-theme-surface dark:bg-natural-card hover:bg-slate-50 dark:hover:bg-natural-hover text-slate-700 dark:text-slate-200 border-natural-border dark:border-natural-border",
   danger: "bg-rose-600 hover:bg-rose-700 text-theme-on-accent border-transparent",
-  ghost: "bg-transparent hover:bg-slate-100 dark:hover:bg-natural-hover text-slate-700 border-transparent",
+  ghost: "bg-transparent hover:bg-slate-100 dark:hover:bg-natural-hover text-slate-700 dark:text-slate-200 border-transparent",
 };
 const SIZE_CLASSES: Record<NonNullable<AnimatedButtonProps["size"]>, string> = {
   sm: "px-3 py-1.5 text-xs",

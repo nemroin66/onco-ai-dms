@@ -106,7 +106,7 @@ export default function SearchRecordsView({
       </div>
 
       {/* Lookup controls bar */}
-      <div className="minimal-card p-5 rounded-lg bg-white">
+      <div className="minimal-card p-5 rounded-lg">
         
         {/* Search Input */}
         <div className="relative">
@@ -156,7 +156,7 @@ export default function SearchRecordsView({
           return (
           <div 
             key={pat.id} 
-            className="minimal-card rounded-lg hover:border-blue-500 hover:shadow-md p-5 flex flex-col justify-between bg-white"
+            className="minimal-card rounded-lg hover:border-blue-500 hover:shadow-md p-5 flex flex-col justify-between"
           >
             <div>
               {/* Header Badge Row */}
@@ -256,7 +256,7 @@ export default function SearchRecordsView({
         )})}
 
         {patients.length === 0 && !searching && (
-          <div className="col-span-full py-16 text-center minimal-card rounded-lg bg-white">
+          <div className="col-span-full py-16 text-center minimal-card rounded-lg">
             <div className="flex justify-center text-natural-border mb-3">
               <Search className="h-12 w-12 text-blue-600" />
             </div>

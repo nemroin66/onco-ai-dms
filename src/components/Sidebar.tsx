@@ -32,10 +32,10 @@ export default function Sidebar({ activeMenu, onChangeMenu, currentUser, onSignO
   const menuItems = [
     { name: "Home" as MenuType, icon: Home, color: "#10B981" },
     { name: "Dashboard" as MenuType, icon: LayoutDashboard, color: "#3B82F6" },
-    { name: "Add Patient" as MenuType, icon: UserPlus, color: "#8B5CF6" },
-    { name: "Search Records" as MenuType, icon: Search, color: "#06B6D4" },
-    { name: "Trash" as MenuType, icon: Trash2, color: "#F43F5E" },
-    { name: "Settings" as MenuType, icon: Settings, color: "#F59E0B" },
+    { name: "Add Patient" as MenuType, icon: UserPlus, color: "#2563EB" },
+    { name: "Search Records" as MenuType, icon: Search, color: "#2563EB" },
+    { name: "Trash" as MenuType, icon: Trash2, color: "#DC2626" },
+    { name: "Settings" as MenuType, icon: Settings, color: "#2563EB" },
   ];
 
   const handleMenuClick = (menu: MenuType) => {
@@ -58,10 +58,10 @@ export default function Sidebar({ activeMenu, onChangeMenu, currentUser, onSignO
             <span /><span /><span />
           </span>
         </button>
-        <div className="h-8 w-8 rounded-lg flex items-center justify-center text-white shadow-sm" style={{ backgroundColor: "#4F46E5" }}>
+        <div className="h-8 w-8 rounded-lg flex items-center justify-center text-white shadow-sm" style={{ backgroundColor: "#2563EB" }}>
           <Activity className="h-5 w-5 animate-pulse" />
         </div>
-        <span className="font-bold tracking-tight leading-none" style={{ color: "#4F46E5" }}>AI DMS</span>
+        <span className="font-bold tracking-tight leading-none" style={{ color: "#2563EB" }}>AI DMS</span>
       </div>
 
       {/* Sidebar drawer overlay */}
@@ -73,11 +73,11 @@ export default function Sidebar({ activeMenu, onChangeMenu, currentUser, onSignO
         <div>
           <div className="flex items-center justify-between gap-3 mb-4">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl flex items-center justify-center text-white shadow-sm" style={{ backgroundColor: "#4F46E5" }}>
+              <div className="h-10 w-10 rounded-xl flex items-center justify-center text-white shadow-sm" style={{ backgroundColor: "#2563EB" }}>
                 <Activity className="h-6 w-6 animate-pulse" />
               </div>
               <div>
-                <h1 className="font-bold text-base tracking-tight leading-none" style={{ color: "#4F46E5" }}>AI DMS</h1>
+                <h1 className="font-bold text-base tracking-tight leading-none" style={{ color: "#2563EB" }}>AI DMS</h1>
               </div>
             </div>
             <button className="text-natural-accent hover:text-natural-accent-dark dark:text-theme-on-accent" onClick={() => setMenuOpen(false)}>
