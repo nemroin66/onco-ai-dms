@@ -34,7 +34,7 @@ function AppContent() {
           name: profile?.name || firebaseUser.displayName || firebaseUser.email || "User",
           email: firebaseUser.email || profile?.email || "",
           role: profile?.role === "admin" ? "admin" : "user",
-          avatarColor: profile?.role === "admin" ? "bg-natural-accent" : "bg-natural-brown",
+          avatarColor: profile?.role === "admin" ? "bg-blue-600" : "bg-green-600",
         });
       } finally {
         setAuthReady(true);
@@ -57,6 +57,7 @@ function AppContent() {
   const [recentPatientsLoaded, setRecentPatientsLoaded] = useState(false);
   const [isLoadingFiles, setIsLoadingFiles] = useState(false);
   const [filesLoaded, setFilesLoaded] = useState(false);
+  const [isLoadingTrash, setIsLoadingTrash] = useState(false);
   const [trashLoaded, setTrashLoaded] = useState(false);
   const [liveCounts, setLiveCounts] = useState<{ active: number; deleted: number; total: number } | null>(null);
   const fetchReqIdRef = useRef(0);
@@ -104,6 +105,7 @@ function AppContent() {
 
   const fetchTrashPatients = useCallback(async () => {
     const reqId = ++trashFetchReqIdRef.current;
+    setIsLoadingTrash(true);
     try {
       const patRes = await apiFetch("/api/patients/trash");
       if (reqId !== trashFetchReqIdRef.current) return;
@@ -113,6 +115,10 @@ function AppContent() {
       }
     } catch (err) {
       console.error("Trash fetch failed:", err);
+    } finally {
+      if (reqId === trashFetchReqIdRef.current) {
+        setIsLoadingTrash(false);
+      }
     }
   }, []);
 
@@ -140,12 +146,6 @@ function AppContent() {
       void fetchClinicalFiles();
     }
   }, [activeMenu, currentUser, fetchClinicalFiles, filesLoaded, isLoadingFiles]);
-
-  useEffect(() => {
-    if (currentUser && activeMenu === "Trash" && !trashLoaded) {
-      void fetchTrashPatients();
-    }
-  }, [activeMenu, currentUser, fetchTrashPatients, trashLoaded]);
 
   const handleLoginSuccess = useCallback((user: UserAccount) => {
     setCurrentUser(user);
@@ -204,7 +204,7 @@ function AppContent() {
           setSelectedPatient(null);
           setAllPatients((current) => current.filter((patient) => patient.id !== id));
           setDeletedPatients((current) => [{ ...pat, isDeleted: true, updatedAt: new Date().toISOString() }, ...current.filter((patient) => patient.id !== id)]);
-          setTrashLoaded(true);
+          setTrashLoaded(false);
           await notify("Patient moved to trash.", "Record Moved", "success");
         } else {
           await notify("Database permission limit. Only authorized clinicians can delete histories.", "Delete Failed", "danger");
@@ -378,9 +378,9 @@ function AppContent() {
 
   if (!authReady) {
     return (
-      <div className="min-h-screen bg-natural-bg flex items-center justify-center px-4 text-slate-700 dark:bg-slate-950 dark:text-slate-200">
+      <div className="min-h-screen bg-white flex items-center justify-center px-4 text-slate-700 dark:bg-slate-950 dark:text-slate-200">
         <div className="flex flex-col items-center gap-4">
-          <div className="h-10 w-10 rounded-full border-3 border-natural-accent/25 border-t-natural-accent animate-spin" aria-hidden="true" />
+          <div className="h-10 w-10 rounded-full border-3 border-blue-200 border-t-blue-600 animate-spin" aria-hidden="true" />
           <p className="text-sm font-bold">Loading session...</p>
         </div>
       </div>
@@ -465,11 +465,13 @@ function AppContent() {
           <PageTransition routeKey={routeKey} variant="fade">
             <TrashView
               allPatients={deletedPatients}
-              onNavigateMenu={setActiveMenu}
               onRestorePatient={handleRestorePatient}
               onClearTrash={handleClearTrash}
               onPermanentlyDeletePatient={handlePermanentlyDeletePatient}
               onViewPatient={handleViewPatient}
+              onLoadTrash={fetchTrashPatients}
+              trashLoaded={trashLoaded}
+              trashLoading={isLoadingTrash}
             />
           </PageTransition>
         );
@@ -489,7 +491,7 @@ function AppContent() {
   };
 
   return (
-    <div className="min-h-screen max-w-full overflow-x-hidden bg-natural-bg text-natural-accent-dark transition-colors duration-200 flex flex-col antialiased relative">
+    <div className="min-h-screen max-w-full overflow-x-hidden bg-white text-slate-900 transition-colors duration-200 flex flex-col antialiased relative">
       {/* Sidebar Navigation */}
       <Sidebar
         activeMenu={activeMenu}

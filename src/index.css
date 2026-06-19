@@ -1306,14 +1306,14 @@ button.shortcut-card:not(:disabled):active {
 }
 
 .btn-clr-edit {
-  background-color: #FFFBEB !important;
-  color: #B45309 !important;
-  border-color: #FDE68A !important;
+  background-color: #EFF6FF !important;
+  color: #1D4ED8 !important;
+  border-color: #BFDBFE !important;
 }
 .dark .btn-clr-edit {
-  background-color: rgba(120, 53, 15, 0.3) !important;
-  color: #FCD34D !important;
-  border-color: rgba(180, 83, 9, 0.35) !important;
+  background-color: rgba(30, 58, 138, 0.25) !important;
+  color: #93C5FD !important;
+  border-color: rgba(30, 64, 175, 0.35) !important;
 }
 
 .btn-clr-delete {
@@ -1339,45 +1339,45 @@ button.shortcut-card:not(:disabled):active {
 }
 
 .btn-clr-ai {
-  background-color: #F5F3FF !important;
-  color: #6D28D9 !important;
-  border-color: #DDD6FE !important;
+  background-color: #EFF6FF !important;
+  color: #1D4ED8 !important;
+  border-color: #BFDBFE !important;
 }
 .dark .btn-clr-ai {
-  background-color: rgba(91, 33, 182, 0.3) !important;
-  color: #C4B5FD !important;
-  border-color: rgba(139, 92, 246, 0.35) !important;
+  background-color: rgba(30, 58, 138, 0.25) !important;
+  color: #93C5FD !important;
+  border-color: rgba(30, 64, 175, 0.35) !important;
 }
 
 .btn-clr-json {
-  background-color: #ECFEFF !important;
-  color: #0E7490 !important;
-  border-color: #A5F3FC !important;
+  background-color: #EFF6FF !important;
+  color: #1D4ED8 !important;
+  border-color: #BFDBFE !important;
 }
 .dark .btn-clr-json {
-  background-color: rgba(21, 94, 117, 0.3) !important;
-  color: #67E8F9 !important;
-  border-color: rgba(6, 182, 212, 0.35) !important;
+  background-color: rgba(30, 58, 138, 0.25) !important;
+  color: #93C5FD !important;
+  border-color: rgba(30, 64, 175, 0.35) !important;
 }
 
 .btn-clr-csv {
-  background-color: #FFF7ED !important;
-  color: #C2410C !important;
-  border-color: #FED7AA !important;
+  background-color: #ECFDF5 !important;
+  color: #047857 !important;
+  border-color: #A7F3D0 !important;
 }
 .dark .btn-clr-csv {
-  background-color: rgba(124, 45, 18, 0.3) !important;
-  color: #FDBA74 !important;
-  border-color: rgba(234, 88, 12, 0.35) !important;
+  background-color: rgba(6, 78, 59, 0.3) !important;
+  color: #6EE7B7 !important;
+  border-color: rgba(16, 185, 129, 0.35) !important;
 }
 
 .btn-clr-chat {
-  background-color: #FDF2F8 !important;
-  color: #9D174D !important;
-  border-color: #FBCFE8 !important;
+  background-color: #EFF6FF !important;
+  color: #1D4ED8 !important;
+  border-color: #BFDBFE !important;
 }
 .dark .btn-clr-chat {
-  background-color: rgba(131, 24, 67, 0.3) !important;
-  color: #F9A8D4 !important;
-  border-color: rgba(236, 72, 153, 0.35) !important;
+  background-color: rgba(30, 58, 138, 0.25) !important;
+  color: #93C5FD !important;
+  border-color: rgba(30, 64, 175, 0.35) !important;
 }

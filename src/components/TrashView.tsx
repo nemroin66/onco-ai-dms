@@ -4,32 +4,36 @@ import {
   RotateCcw, 
   Info,
   Search,
-  History
+  History,
+  RefreshCw
 } from "lucide-react";
 import { PatientRecord } from "../types";
-import { confirmDialog } from "./AppDialog";
 
 interface TrashViewProps {
   allPatients: PatientRecord[];
-  onNavigateMenu: (menu: any) => void;
   onRestorePatient: (id: string) => Promise<void>;
   onClearTrash: () => Promise<void>;
   onPermanentlyDeletePatient: (id: string) => Promise<void>;
   onViewPatient: (patient: PatientRecord) => void;
+  onLoadTrash: () => Promise<void>;
+  trashLoaded: boolean;
+  trashLoading: boolean;
 }
 
 export default function TrashView({ 
   allPatients, 
-  onNavigateMenu, 
   onRestorePatient, 
   onClearTrash,
   onPermanentlyDeletePatient,
-  onViewPatient 
+  onViewPatient,
+  onLoadTrash,
+  trashLoaded,
+  trashLoading
 }: TrashViewProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [isClearing, setIsClearing] = useState(false);
 
-  const deletedPatients = allPatients.filter(p => p.isDeleted);
+  const deletedPatients = trashLoaded ? allPatients.filter(p => p.isDeleted) : [];
   
   const filteredPatients = deletedPatients.filter(p => {
     const name = `${p.first_name} ${p.last_name}`.toLowerCase();
@@ -39,13 +43,11 @@ export default function TrashView({
   }).sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 
   const handleClearTrash = async () => {
-    if (await confirmDialog("Are you sure you want to PERMANENTLY wipe all deleted records? This action cannot be undone and will purge all associated files from the secure storage.", "Permanently Wipe Trash", "danger", "Wipe Everything", "Cancel")) {
-      setIsClearing(true);
-      try {
-        await onClearTrash();
-      } finally {
-        setIsClearing(false);
-      }
+    setIsClearing(true);
+    try {
+      await onClearTrash();
+    } finally {
+      setIsClearing(false);
     }
   };
 
@@ -66,11 +68,20 @@ export default function TrashView({
         </div>
 
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onLoadTrash}
+            disabled={trashLoading}
+            className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-xs font-bold border border-blue-700 transition-all active:scale-95 disabled:opacity-60"
+          >
+            <RefreshCw className={`h-4 w-4 ${trashLoading ? "animate-spin" : ""}`} />
+            {trashLoading ? "Loading..." : trashLoaded ? "Reload Trash Records" : "Load Trash Records"}
+          </button>
           {deletedPatients.length > 0 && (
           <button
             onClick={handleClearTrash}
             disabled={isClearing}
-            className="flex items-center gap-2 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 px-4 py-2 rounded-xl text-xs font-bold border border-rose-200 dark:border-rose-900/50 transition-all active:scale-95 disabled:opacity-50"
+            className="flex items-center gap-2 bg-red-50 hover:bg-red-100 dark:bg-red-950/30 text-red-700 dark:text-red-300 px-4 py-2 rounded-lg text-xs font-bold border border-red-200 dark:border-red-900/50 transition-all active:scale-95 disabled:opacity-50"
           >
             <Trash2 className={`h-4 w-4 ${isClearing ? "animate-spin" : ""}`} />
             {isClearing ? "Purging..." : "Empty Trash"}
@@ -80,6 +91,7 @@ export default function TrashView({
       </div>
 
       {/* Search & Filter Bar */}
+      {trashLoaded && (
       <div className="flex flex-col sm:flex-row items-center gap-4">
         <div className="relative flex-1 w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -88,13 +100,35 @@ export default function TrashView({
             placeholder="Search deleted records by name or ID..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-theme-surface dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl pl-10 pr-4 py-2 text-sm focus:ring-2 focus:ring-natural-accent/50 focus:border-natural-accent outline-none transition-all"
+            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg pl-10 pr-4 py-2 text-sm focus:ring-2 focus:ring-blue-500/40 focus:border-blue-600 outline-none transition-all"
           />
         </div>
       </div>
+      )}
 
       {/* Main List */}
-      {filteredPatients.length === 0 ? (
+      {!trashLoaded ? (
+        <div className="minimal-card rounded-lg py-16 px-4 text-center space-y-4 bg-white">
+          <div className="flex justify-center">
+            <div className="h-16 w-16 bg-blue-50 dark:bg-blue-950/30 rounded-full flex items-center justify-center">
+              <Trash2 className="h-8 w-8 text-blue-600 dark:text-blue-300" />
+            </div>
+          </div>
+          <div>
+            <h3 className="font-bold text-slate-700 dark:text-slate-200">Trash records not loaded</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">Click Load Trash Records to fetch deleted records.</p>
+          </div>
+          <button
+            type="button"
+            onClick={onLoadTrash}
+            disabled={trashLoading}
+            className="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-xs font-bold border border-blue-700 transition-all active:scale-95 disabled:opacity-60"
+          >
+            <RefreshCw className={`h-4 w-4 ${trashLoading ? "animate-spin" : ""}`} />
+            {trashLoading ? "Loading..." : "Load Trash Records"}
+          </button>
+        </div>
+      ) : filteredPatients.length === 0 ? (
         <div className="minimal-card rounded-2xl py-16 px-4 text-center space-y-4">
           <div className="flex justify-center">
             <div className="h-16 w-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center">
@@ -107,7 +141,7 @@ export default function TrashView({
           </div>
         </div>
       ) : (
-        <div className="minimal-card rounded-2xl overflow-hidden">
+        <div className="minimal-card rounded-lg overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
@@ -120,7 +154,7 @@ export default function TrashView({
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-705 text-xs text-slate-600 dark:text-slate-300">
                 {filteredPatients.map((pat) => (
-                  <tr key={pat.id} className="hover:bg-rose-50/30 dark:hover:bg-rose-950/10 transition-colors">
+                  <tr key={pat.id} className="hover:bg-blue-50/40 dark:hover:bg-blue-950/10 transition-colors">
                     <td className="py-3 px-5 font-mono font-semibold text-slate-700 dark:text-slate-200">{pat.auto_id}</td>
                     <td className="py-3 px-5 font-bold text-slate-800 dark:text-theme-on-accent">
                       {pat.first_name} {pat.last_name}

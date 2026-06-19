@@ -3,17 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo } from "react";
+import React, { useState } from "react";
 import { 
   Search, 
-  ArrowUpDown,
   Eye,
   Edit,
   Trash2,
   Building,
   Phone,
 } from "lucide-react";
-import { PatientRecord, OncologyCategory } from "../types";
+import { PatientRecord } from "../types";
 import { apiFetch } from "../lib/api-client";
 
 interface SearchRecordsViewProps {
@@ -28,63 +27,11 @@ export default function SearchRecordsView({
   onDeletePatient,
 }: SearchRecordsViewProps) {
 
-  // Sorters and Filters state
   const [pendingSearchQuery, setPendingSearchQuery] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<PatientRecord[] | null>(null);
   const [searching, setSearching] = useState(false);
-  const [selectedOncology, setSelectedOncology] = useState<string>("All");
-  const [selectedStatus, setSelectedStatus] = useState<string>("All");
-  const [selectedHospital, setSelectedHospital] = useState<string>("All");
-  const [sortBy, setSortBy] = useState<"name" | "updatedAt" | "overall_stage" | "oncology">("updatedAt");
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
-
-  // Get unique hospitals from search results to populate dynamic hospital selector
-  const uniqueHospitals = Array.from(
-    new Set((searchResults ?? []).map(p => p.hospital).filter(h => h && h.trim() !== ""))
-  );
-
-  // Client-side filter + sort on server search results only
-  const sortedPatients = useMemo(() => {
-    const source = searchResults ?? [];
-    const query = searchQuery.trim().toLowerCase();
-    const terms = query.split(/\s+/).filter(Boolean);
-
-    const filtered = source.filter((pat) => {
-      // Server already filtered by search terms, so only apply oncology/status/hospital filters
-      const patientOncologyTypes = pat.oncology_types && pat.oncology_types.length > 0 ? pat.oncology_types : [pat.oncology || "Other"];
-      const matchesOncology = selectedOncology === "All" || patientOncologyTypes.includes(selectedOncology);
-      const matchesStatus = selectedStatus === "All" || pat.status === selectedStatus;
-      const matchesHospital = selectedHospital === "All" || pat.hospital === selectedHospital;
-      return matchesOncology && matchesStatus && matchesHospital;
-    });
-
-    return filtered.sort((a, b) => {
-      let comparison = 0;
-      if (sortBy === "name") {
-        const nameA = `${a.first_name || ""} ${a.last_name || ""}`.toLowerCase();
-        const nameB = `${b.first_name || ""} ${b.last_name || ""}`.toLowerCase();
-        comparison = nameA.localeCompare(nameB);
-      } else if (sortBy === "overall_stage") {
-        const stageA = a.overall_stage || "";
-        const stageB = b.overall_stage || "";
-        comparison = stageA.localeCompare(stageB);
-      } else if (sortBy === "oncology") {
-        const oncA = a.oncology || "";
-        const oncB = b.oncology || "";
-        comparison = oncA.localeCompare(oncB);
-      } else {
-        const dateA = new Date(a.updatedAt).getTime();
-        const dateB = new Date(b.updatedAt).getTime();
-        comparison = dateA - dateB;
-      }
-      return sortDirection === "asc" ? comparison : -comparison;
-    });
-  }, [searchResults, searchQuery, selectedOncology, selectedStatus, selectedHospital, sortBy, sortDirection]);
-
-  const handleToggleDirection = () => {
-    setSortDirection(prev => prev === "asc" ? "desc" : "asc");
-  };
+  const patients = searchResults ?? [];
 
   const handleSearchSubmit = async () => {
     const query = pendingSearchQuery.trim();
@@ -100,9 +47,6 @@ export default function SearchRecordsView({
         includeDeleted: "false",
         limit: "100",
       });
-      if (selectedOncology !== "All") params.set("oncology", selectedOncology);
-      if (selectedStatus !== "All") params.set("status", selectedStatus);
-      if (selectedHospital !== "All") params.set("hospital", selectedHospital);
       const res = await apiFetch(`/api/patients?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
@@ -132,15 +76,15 @@ export default function SearchRecordsView({
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
       case "active":
-        return "bg-natural-accent/10 text-natural-accent-dark dark:text-natural-hover border border-natural-accent/30 dark:border-natural-accent/20";
+        return "bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-300 border border-green-200 dark:border-green-900/40";
       case "under_treatment":
-        return "bg-natural-brown/10 text-natural-brown dark:text-natural-gold border border-natural-brown/30";
+        return "bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300 border border-blue-200 dark:border-blue-900/40";
       case "follow_up":
-        return "bg-natural-card dark:bg-slate-900 text-slate-700 dark:text-slate-350 border border-natural-border dark:border-slate-700";
+        return "bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300 border border-blue-200 dark:border-blue-900/40";
       case "discharged":
-        return "bg-natural-brown/15 dark:bg-natural-brown/10 text-natural-brown dark:text-natural-gold border border-natural-brown/30";
+        return "bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300 border border-red-200 dark:border-red-900/40";
       default:
-        return "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-205 font-bold";
+        return "bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300 border border-blue-200 dark:border-blue-900/40 font-bold";
     }
   };
 
@@ -154,7 +98,7 @@ export default function SearchRecordsView({
         </div>
         {searchResults !== null && (
           <div className="flex items-center gap-2 text-xs font-semibold">
-            <span className="bg-natural-accent/10 dark:bg-natural-accent/20 text-natural-accent-dark dark:text-natural-hover py-1.5 px-3 rounded-xl border border-natural-accent/30 leading-normal">
+            <span className="bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 py-1.5 px-3 rounded-lg border border-blue-200 dark:border-blue-900/40 leading-normal">
               Results: {searchResults.length}
             </span>
           </div>
@@ -162,7 +106,7 @@ export default function SearchRecordsView({
       </div>
 
       {/* Lookup controls bar */}
-      <div className="minimal-card p-5 rounded-2xl space-y-4">
+      <div className="minimal-card p-5 rounded-lg bg-white">
         
         {/* Search Input */}
         <div className="relative">
@@ -174,13 +118,13 @@ export default function SearchRecordsView({
             onChange={(e) => setPendingSearchQuery(e.target.value)}
             onKeyDown={handleSearchKeyDown}
             placeholder="Search by patient name, BHT, clinic, auto ID, NIC, TP, or hospital..."
-            className="w-full pr-36 pl-11 py-3 bg-slate-50 dark:bg-slate-900 border border-natural-border dark:border-slate-700 placeholder-slate-400 dark:placeholder-slate-500 rounded-xl focus:border-natural-accent outline-none focus:ring-1 focus:ring-natural-accent transition-all text-xs"
+            className="w-full pr-36 pl-11 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 placeholder-slate-400 dark:placeholder-slate-500 rounded-lg focus:border-blue-600 outline-none focus:ring-1 focus:ring-blue-500 transition-all text-xs"
           />
           {searchResults !== null && (
             <button
               type="button"
               onClick={handleClearSearch}
-              className="absolute right-28 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 py-1 px-2 rounded-lg transition"
+              className="absolute right-28 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 text-xs text-slate-500 hover:text-blue-700 dark:hover:text-blue-300 py-1 px-2 rounded-lg transition"
             >
               Clear
             </button>
@@ -189,7 +133,7 @@ export default function SearchRecordsView({
             type="button"
             onClick={handleSearchSubmit}
             disabled={searching}
-            className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center gap-2 bg-natural-accent text-theme-on-accent px-3 py-2 rounded-xl text-xs font-semibold hover:bg-natural-accent-dark transition disabled:opacity-60"
+            className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center gap-2 bg-blue-600 text-white px-3 py-2 rounded-lg text-xs font-semibold hover:bg-blue-700 transition disabled:opacity-60"
           >
             {searching ? (
               <span className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
@@ -200,88 +144,11 @@ export default function SearchRecordsView({
           </button>
         </div>
 
-        {/* Filters and Sorting controls row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 text-xs">
-          
-          {/* Oncology Filter */}
-          <div className="space-y-1">
-            <label className="label-form block leading-none">Oncology Class</label>
-            <select
-              value={selectedOncology}
-              onChange={(e) => setSelectedOncology(e.target.value)}
-              className="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:border-blue-500 rounded-button cursor-pointer"
-            >
-              <option value="All">All Tumor Types</option>
-              {Object.values(OncologyCategory).map((cat) => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Status Filter */}
-          <div className="space-y-1">
-            <label className="label-form block leading-none">Clinical Status</label>
-            <select
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-              className="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:border-blue-500 rounded-button cursor-pointer"
-            >
-              <option value="All">All Statuses</option>
-              <option value="active">Active</option>
-              <option value="under_treatment">Under Treatment</option>
-              <option value="follow_up">Follow Up</option>
-              <option value="discharged">Discharged</option>
-            </select>
-          </div>
-
-          {/* Hospital Filter */}
-          <div className="space-y-1">
-            <label className="label-form block leading-none">Admitted Hospital</label>
-            <select
-              value={selectedHospital}
-              onChange={(e) => setSelectedHospital(e.target.value)}
-              className="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:border-blue-500 rounded-button cursor-pointer"
-            >
-              <option value="All">All Hospitals</option>
-              {uniqueHospitals.map((hosp) => (
-                <option key={hosp} value={hosp}>{hosp}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Sort By Field */}
-          <div className="space-y-1">
-            <label className="label-form block leading-none">Order Criteria</label>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
-              className="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:border-blue-500 rounded-button cursor-pointer"
-            >
-              <option value="updatedAt">Last Modified</option>
-              <option value="name">Patient Name</option>
-              <option value="oncology">Cancer Type</option>
-              <option value="overall_stage">Overall Tumor Stage</option>
-            </select>
-          </div>
-
-          {/* Toggle Sorting Direction */}
-          <div className="space-y-1 flex flex-col justify-end">
-            <button
-              onClick={handleToggleDirection}
-              className="w-full p-2.5 flex items-center justify-center gap-2 bg-slate-50 hover:bg-natural-sidebar dark:bg-slate-705 dark:hover:bg-slate-650 text-slate-755 dark:text-slate-350 font-semibold border border-natural-border dark:border-slate-650 rounded-xl transition cursor-pointer select-none"
-            >
-              <ArrowUpDown className="h-4 w-4 text-natural-accent" />
-              <span>{sortDirection === "asc" ? "Ascending" : "Descending"}</span>
-            </button>
-          </div>
-
-        </div>
-
       </div>
 
       {/* Patient lookup list */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {sortedPatients.map((pat) => {
+        {patients.map((pat) => {
           const patientName = [pat.title, pat.first_name, pat.last_name].filter(Boolean).join(" ") || "Unnamed Patient";
           const oncology = (pat.oncology_types && pat.oncology_types.length > 0 ? pat.oncology_types : [pat.oncology || "Other"]).join(", ");
           const status = pat.status || "active";
@@ -289,7 +156,7 @@ export default function SearchRecordsView({
           return (
           <div 
             key={pat.id} 
-            className="minimal-card rounded-2xl hover:border-natural-accent hover:shadow-md p-5 flex flex-col justify-between"
+            className="minimal-card rounded-lg hover:border-blue-500 hover:shadow-md p-5 flex flex-col justify-between bg-white"
           >
             <div>
               {/* Header Badge Row */}
@@ -336,7 +203,7 @@ export default function SearchRecordsView({
                 {pat.hospital && (
                   <div className="flex items-center gap-1.5 justify-between">
                     <span className="text-slate-655 dark:text-slate-350 font-semibold flex items-center gap-1 leading-normal">
-                      <Building className="h-3.5 w-3.5 text-natural-brown" />
+                      <Building className="h-3.5 w-3.5 text-blue-600" />
                       <span>Hospital:</span>
                     </span>
                     <span className="value-display truncate max-w-[150px] text-slate-805 dark:text-slate-100 font-semibold leading-normal" title={pat.hospital}>{pat.hospital}</span>
@@ -346,7 +213,7 @@ export default function SearchRecordsView({
                 {pat.tp && (
                   <div className="flex items-center gap-1.5 justify-between ">
                     <span className="text-slate-655 dark:text-slate-350 font-semibold flex items-center gap-1 leading-normal">
-                      <Phone className="h-3.5 w-3.5 text-natural-accent" />
+                      <Phone className="h-3.5 w-3.5 text-green-600" />
                       <span>Phone:</span>
                     </span>
                     <span className="value-display text-slate-805 dark:text-slate-100 font-semibold leading-normal">{pat.tp}</span>
@@ -360,7 +227,7 @@ export default function SearchRecordsView({
               <button
                 id={`btn-search-view-${pat.id}`}
                 onClick={() => onViewPatient(pat)}
-                className="btn-clr-view flex-1 inline-flex items-center justify-center gap-1.5 py-2 rounded-xl text-[11.5px] font-bold transition-colors cursor-pointer select-none"
+                className="btn-clr-view flex-1 inline-flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11.5px] font-bold transition-colors cursor-pointer select-none"
               >
                 <Eye className="h-3.5 w-3.5" />
                 <span>View Dossier</span>
@@ -369,7 +236,7 @@ export default function SearchRecordsView({
               <button
                 id={`btn-search-edit-${pat.id}`}
                 onClick={() => onEditPatient(pat)}
-                className="btn-clr-edit inline-flex items-center justify-center p-2 rounded-xl transition-colors cursor-pointer"
+                className="btn-clr-edit inline-flex items-center justify-center p-2 rounded-lg transition-colors cursor-pointer"
                 title="Edit Records"
               >
                 <Edit className="h-4 w-4" />
@@ -378,7 +245,7 @@ export default function SearchRecordsView({
               <button
                 id={`btn-search-delete-${pat.id}`}
                 onClick={() => onDeletePatient(pat.id, pat)}
-                className="btn-clr-delete inline-flex items-center justify-center p-2 rounded-xl transition-colors cursor-pointer"
+                className="btn-clr-delete inline-flex items-center justify-center p-2 rounded-lg transition-colors cursor-pointer"
                 title="Delete Record"
               >
                 <Trash2 className="h-4 w-4" />
@@ -388,16 +255,16 @@ export default function SearchRecordsView({
           </div>
         )})}
 
-        {sortedPatients.length === 0 && !searching && (
-          <div className="col-span-full py-16 text-center minimal-card rounded-2xl">
+        {patients.length === 0 && !searching && (
+          <div className="col-span-full py-16 text-center minimal-card rounded-lg bg-white">
             <div className="flex justify-center text-natural-border mb-3">
-              <Search className="h-12 w-12 text-natural-accent" />
+              <Search className="h-12 w-12 text-blue-600" />
             </div>
             {searchQuery ? (
               <>
                 <h4 className="font-bold text-slate-700 dark:text-slate-200">No Patient Records Matched</h4>
                 <p className="text-xs text-slate-655 dark:text-slate-200 mt-1 max-w-sm mx-auto">
-                  Modify search query or filters and try again.
+                  Modify the search query and try again.
                 </p>
               </>
             ) : (
