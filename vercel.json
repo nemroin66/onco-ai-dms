@@ -3,9 +3,25 @@
   "buildCommand": "npm run vercel-build",
   "outputDirectory": "dist",
   "functions": {
-    "api/index.ts": {
+    "api/[...path].ts": {
+      "maxDuration": 30,
+      "memory": 1024
+    },
+    "api/wipe.ts": {
       "maxDuration": 60,
       "memory": 1024
+    },
+    "api/chat.ts": {
+      "maxDuration": 60,
+      "memory": 1024
+    },
+    "api/extract.ts": {
+      "maxDuration": 60,
+      "memory": 1024
+    },
+    "api/health.ts": {
+      "maxDuration": 10,
+      "memory": 256
     }
   },
   "redirects": [
@@ -16,8 +32,8 @@
   ],
   "rewrites": [
     {
-      "source": "/api/:path*",
-      "destination": "/api?path=:path*&"
+      "source": "/api/document-fill",
+      "destination": "/api/extract"
     }
   ],
   "headers": [

@@ -5,6 +5,22 @@ import { bumpAnalyticsVersion } from "../analytics.js";
 import { vercelUser } from "../auth.js";
 import { logAudit } from "../audit.js";
 
+const BATCH_SIZE = 25;
+const BATCH_DELAY_MS = 200;
+
+async function deleteWithRateLimit<T>(items: T[], fn: (item: T) => Promise<void>, label: string) {
+  let count = 0;
+  for (let i = 0; i < items.length; i += BATCH_SIZE) {
+    const batch = items.slice(i, i + BATCH_SIZE);
+    await Promise.all(batch.map(fn));
+    count += batch.length;
+    console.log(`[wipe] ${label}: ${count}/${items.length}`);
+    if (i + BATCH_SIZE < items.length) {
+      await new Promise(r => setTimeout(r, BATCH_DELAY_MS));
+    }
+  }
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -13,7 +29,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const user = vercelUser(req);
     const files = await listCollection("files");
-    await Promise.all(files.map(async (file: any) => {
+    await deleteWithRateLimit(files, async (file: any) => {
       if (file.driveFileId) {
         try {
           await deleteDriveFile(file.driveFileId);
@@ -22,10 +38,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       }
       await deleteDocument("files", file.id);
-    }));
+    }, "files");
 
     const patients = await listCollection("patients");
-    await Promise.all(patients.map(async (patient: any) => {
+    await deleteWithRateLimit(patients, async (patient: any) => {
       if (patient.driveFolderId) {
         try {
           await recursivelyDeleteDriveFolder(patient.driveFolderId);
@@ -34,7 +50,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       }
       await deleteDocument("patients", patient.id);
-    }));
+    }, "patients");
 
     const driveFolderId = process.env.DRIVE_FOLDER_ID || process.env.GOOGLE_DRIVE_FOLDER_ID || process.env.VITE_DRIVE_ROOT_FOLDER_ID;
 

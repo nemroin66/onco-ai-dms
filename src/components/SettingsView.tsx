@@ -29,8 +29,7 @@ import {
 } from "lucide-react";
 import { apiFetch, apiFetchJson } from "../lib/api-client";
 import { confirmDialog, notify } from "./AppDialog";
-import { doc, setDoc } from "firebase/firestore";
-import { db } from "../lib/firebase";
+import { apiFetchJson } from "../lib/api-client";
 import { useTheme } from "./ThemeProvider";
 
 interface SettingsViewProps {
@@ -201,7 +200,7 @@ export default function SettingsView({ currentUser, onWipeDatabase, onUpdateUser
     if (!currentUser.uid) return;
     setSavingName(true);
     try {
-      await setDoc(doc(db, "users", currentUser.uid), { name: trimmed }, { merge: true });
+      await apiFetchJson("/api/users", { method: "PATCH", body: JSON.stringify({ name: trimmed }), headers: { "Content-Type": "application/json" } });
       onUpdateUser?.({ name: trimmed });
       await notify("Display name updated.", "Profile Saved", "success");
     } catch (e) {

@@ -1,6 +1,5 @@
 import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User, signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
-import { auth, db } from './firebase';
+import { auth } from './firebase';
 import firebaseConfig from './firebaseConfig';
 
 const isConfigValid = () => {
@@ -83,19 +82,4 @@ export const logout = async () => {
   await auth.signOut();
 };
 
-export type FirebaseUserProfile = {
-  name?: string;
-  role?: "admin" | "user";
-  email?: string;
-};
 
-export const getFirebaseUserProfile = async (uid: string): Promise<FirebaseUserProfile | null> => {
-  try {
-    const profileDoc = await getDoc(doc(db, 'users', uid));
-    if (!profileDoc.exists()) return null;
-    return profileDoc.data() as FirebaseUserProfile;
-  } catch (err) {
-    console.error('Error loading user profile from Firestore:', err);
-    return null;
-  }
-};

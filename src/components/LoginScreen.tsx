@@ -166,18 +166,14 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                 <button
                   type="button"
                   onClick={handleAcceptAndClose}
-                  className="w-full sm:w-auto px-5 py-2.5 text-white rounded-xl text-xs font-bold shadow-md transition-colors cursor-pointer text-center"
-                  style={{ backgroundColor: "#2563EB" }}
+                  className="w-full sm:w-auto px-5 py-2.5 text-white rounded-xl text-xs font-bold shadow-md bg-blue-600 hover:bg-blue-700 transition-colors cursor-pointer text-center"
                 >
                   I Confirm & Accept
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowAgreementView(false)}
-                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5"
-                  style={{ border: "1px solid #2563EB", color: "#2563EB", backgroundColor: "transparent" }}
-                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#2563EB10"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5 border border-blue-600 text-blue-600 bg-transparent hover:bg-blue-50 dark:border-blue-400 dark:text-blue-400 dark:hover:bg-blue-950/20"
                 >
                   <ArrowLeft className="h-3.5 w-3.5" />
                   Back to Login
@@ -201,11 +197,11 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
       
       <div className="sm:mx-auto sm:w-full sm:max-w-md lg:max-w-lg relative z-10">
         <div className="flex justify-center">
-          <div className="h-16 w-16 rounded-2xl flex items-center justify-center text-white shadow-md border border-theme-highlight/10" style={{ backgroundColor: "#2563EB" }}>
+          <div className="h-16 w-16 rounded-2xl flex items-center justify-center text-white shadow-md bg-blue-600 dark:bg-blue-500 border border-theme-highlight/10">
             <Activity className="h-10 w-10 animate-pulse" />
           </div>
         </div>
-        <h2 className="mt-6 text-center text-3xl font-bold tracking-tight" style={{ color: "#2563EB" }}>
+        <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-blue-600 dark:text-blue-400">
           AI DMS
         </h2>
         <p className="mt-2 text-center text-sm text-slate-500 dark:text-slate-400 font-semibold">
@@ -217,7 +213,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
         <div className="minimal-card py-8 px-6 sm:px-10 rounded-3xl">
           
           {/* Status Indicators */}
-          <div className="mb-6 rounded-2xl p-4 flex gap-3 text-sm text-white" style={{ backgroundColor: "#10B981" }}>
+          <div className="mb-6 rounded-2xl p-4 flex gap-3 text-sm text-white bg-emerald-500 dark:bg-emerald-600">
             <ShieldCheck className="h-5 w-5 flex-shrink-0 animate-bounce" />
             <div>
               <p className="font-bold text-xs">Medical Security Protocol Active</p>
@@ -268,8 +264,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
               variant="primary"
               size="lg"
               fullWidth
-              className="border-transparent text-white"
-              style={{ backgroundColor: "#2563EB" }}
+              className="border-transparent text-white bg-blue-600 dark:bg-blue-500 hover:bg-blue-700 dark:hover:bg-blue-600"
             >
               Access Clinical Center
             </AnimatedButton>
@@ -278,10 +273,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
               type="button"
               onClick={handleGoogleLogin}
               disabled={isLoggingIn}
-              className="w-full flex justify-center items-center gap-2 py-3 px-4 border rounded-xl shadow-sm text-xs font-bold transition-all cursor-pointer"
-              style={{ borderColor: "#4285F4", color: "#4285F4", backgroundColor: "transparent" }}
-              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#4285F410"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+              className="w-full flex justify-center items-center gap-2 py-3 px-4 border rounded-xl shadow-sm text-xs font-bold transition-all cursor-pointer border-blue-500 text-blue-500 bg-transparent hover:bg-blue-50 dark:border-blue-400 dark:text-blue-400 dark:hover:bg-blue-950/20"
             >
                Sign in with Google
             </button>
@@ -293,8 +285,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                   <button
                     type="button"
                     onClick={() => setAgreed(true)}
-                    className="px-4 py-1.5 text-white rounded-lg text-xs font-bold transition-colors"
-                    style={{ backgroundColor: "#2563EB" }}
+                    className="px-4 py-1.5 text-white rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 transition-colors"
                   >
                     I Agree to Terms
                   </button>
@@ -306,14 +297,13 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                     console.log("Agreement link clicked");
                     setShowAgreementView(true);
                   }}
-                  className="font-semibold underline cursor-pointer focus:outline-none relative z-50 text-[11.5px]"
-                  style={{ color: "#2563EB" }}
+                  className="font-semibold underline cursor-pointer focus:outline-none relative z-50 text-[11.5px] text-blue-600 dark:text-blue-400"
                 >
                   View User Agreement
                 </button>
                   
                 {agreed && (
-                  <span className="font-bold text-[11.5px]" style={{ color: "#10B981" }}>
+                  <span className="font-bold text-[11.5px] text-emerald-500 dark:text-emerald-400">
                     Institutional Agreement Accepted
                   </span>
                 )}

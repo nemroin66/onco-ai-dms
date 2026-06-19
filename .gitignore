@@ -18,3 +18,4 @@ deployment-package/
 deployment-package.zip
 .vercel
 .env.clean
+firebase-applet-config.json

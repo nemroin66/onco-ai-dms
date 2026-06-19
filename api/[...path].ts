@@ -1,10 +1,7 @@
 process.env.NODE_NO_DEPRECATION = "1";
 process.noDeprecation = true;
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import chat from "../server-lib/handlers/chat.js";
-import extract from "../server-lib/handlers/extract.js";
 import files from "../server-lib/handlers/files.js";
-import health from "../server-lib/handlers/health.js";
 import patients from "../server-lib/handlers/patients.js";
 import patient from "../server-lib/handlers/patients/id/index.js";
 import permanent from "../server-lib/handlers/patients/id/permanent.js";
@@ -14,34 +11,29 @@ import count from "../server-lib/handlers/patients/count.js";
 import patientExport from "../server-lib/handlers/patients/export.js";
 import storage from "../server-lib/handlers/storage.js";
 import quota from "../server-lib/handlers/quota.js";
-import wipe from "../server-lib/handlers/wipe.js";
 import analytics from "../server-lib/handlers/analytics.js";
 import users from "../server-lib/handlers/users.js";
-import { requireAdmin, vercelAuth } from "../server-lib/auth.js";
+import { vercelAuth } from "../server-lib/auth.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const rawPath = req.query.path;
   const parts = (Array.isArray(rawPath) ? rawPath : String(rawPath || "").split("/")).filter(Boolean);
   const route = parts.join("/");
 
-  if (route === "health") return health(req, res);
+  if (route === "favicon.ico") return res.status(204).end();
+
   const user = await vercelAuth(req, res);
   if (!user) return;
 
   if (
-    route === "wipe"
-    || (route === "patients/trash" && req.method === "POST")
+    (route === "patients/trash" && req.method === "POST")
     || (parts[0] === "patients" && parts[2] === "permanent")
   ) {
-    try {
-      requireAdmin(user);
-    } catch (error: any) {
-      console.error("[admin] Access denied:", error?.message || error);
-      return res.status(error?.status || 403).json({ error: "Administrator access required." });
+    if (user.role !== "admin") {
+      console.error("[admin] Access denied: user role is", user.role);
+      return res.status(403).json({ error: "Administrator access required." });
     }
   }
-
-  if (route === "favicon.ico") return res.status(204).end();
 
   if (parts[0] === "analytics") {
     req.query.analyticsPath = parts.slice(1).join("/");
@@ -49,10 +41,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   if (route === "users") return users(req, res);
   if (route === "quota") return quota(req, res);
-  if (route === "chat") return chat(req, res);
-  if (route === "extract" || route === "document-fill") return extract(req, res);
   if (route === "files") return files(req, res);
-  if (route === "wipe") return wipe(req, res);
   if (route === "patients") return patients(req, res);
   if (route === "patients/export/columns") {
     req.query.exportPath = "columns";

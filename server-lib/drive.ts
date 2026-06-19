@@ -1,7 +1,11 @@
 import path from "path";
 import { getGoogleAccessToken, listCollection, deleteDocument, saveDocument } from "./firebase.js";
 
+let driveTokenCache: { token: string; expiresAt: number } | null = null;
+
 export async function getDriveAccessToken() {
+  if (driveTokenCache && Date.now() < driveTokenCache.expiresAt) return driveTokenCache.token;
+
   const refreshToken = process.env.GOOGLE_DRIVE_REFRESH_TOKEN;
   const clientId = process.env.GOOGLE_DRIVE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_DRIVE_CLIENT_SECRET;
@@ -18,7 +22,10 @@ export async function getDriveAccessToken() {
       }),
     });
     if (!response.ok) throw new Error(`Drive OAuth refresh failed: ${await response.text()}`);
-    return (await response.json()).access_token as string;
+    const data = await response.json();
+    const token = data.access_token as string;
+    driveTokenCache = { token, expiresAt: Date.now() + 3300 * 1000 };
+    return token;
   }
 
   return getGoogleAccessToken("https://www.googleapis.com/auth/drive");

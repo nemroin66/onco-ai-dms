@@ -40,7 +40,12 @@ function base64Url(input: string | Buffer) {
     .replace(/\//g, "_");
 }
 
+const tokenCache = new Map<string, { token: string; expiresAt: number }>();
+
 export async function getGoogleAccessToken(scope: string) {
+  const cached = tokenCache.get(scope);
+  if (cached && Date.now() < cached.expiresAt) return cached.token;
+
   const serviceAccount = parseServiceAccount(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || "");
   if (!serviceAccount?.client_email || !serviceAccount?.private_key) {
     throw new Error("FIREBASE_SERVICE_ACCOUNT_JSON is required for Firestore server access.");
@@ -69,7 +74,10 @@ export async function getGoogleAccessToken(scope: string) {
   });
 
   if (!response.ok) throw new Error(`Google auth failed: ${await response.text()}`);
-  return (await response.json()).access_token as string;
+  const data = await response.json();
+  const token = data.access_token as string;
+  tokenCache.set(scope, { token, expiresAt: Date.now() + 3300 * 1000 });
+  return token;
 }
 
 export async function getFirestoreDoc(collection: string, id: string): Promise<Record<string, any> | null> {

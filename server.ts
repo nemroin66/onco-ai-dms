@@ -119,26 +119,14 @@ const primaryGeminiModel = env("GEMINI_MODEL_PRIMARY") || "gemini-3.1-flash-lite
 const secondaryGeminiModel = env("GEMINI_MODEL_SECONDARY") || "gemini-3.1-flash-lite";
 
 function parseServiceAccount(raw: string) {
-  const readFromLocalEnvNew = () => {
-    try {
-      const file = fs.readFileSync(path.join(process.cwd(), ".env.clean"), "utf8");
-      const match = file.match(/FIREBASE_SERVICE_ACCOUNT_JSON=(\{[\s\S]*?\n\})\n#/);
-      return match?.[1] || "";
-    } catch {
-      return "";
-    }
-  };
-
-  if (!raw || raw === "{") raw = readFromLocalEnvNew();
-  if (!raw) return null;
+  if (!raw || raw === "{") return null;
   try {
     return JSON.parse(raw.replace(/\n/g, "\\n").replace(/\\n/g, "\n"));
   } catch {
     try {
       return JSON.parse(raw);
     } catch {
-      const fallback = readFromLocalEnvNew();
-      return fallback ? JSON.parse(fallback) : null;
+      return null;
     }
   }
 }
