@@ -4,23 +4,22 @@
   "outputDirectory": "dist",
   "functions": {
     "api/[...path].ts": {
-      "maxDuration": 60,
+      "maxDuration": 300,
       "memory": 1024
     },
     "api/wipe.ts": {
-      "maxDuration": 60,
+      "maxDuration": 300,
       "memory": 1024
     },
     "api/chat.ts": {
-      "maxDuration": 60,
+      "maxDuration": 300,
       "memory": 1024
     },
     "api/extract.ts": {
-      "maxDuration": 60,
+      "maxDuration": 300,
       "memory": 1024
     },
     "api/health.ts": {
-      "maxDuration": 10,
       "memory": 256
     }
   },
