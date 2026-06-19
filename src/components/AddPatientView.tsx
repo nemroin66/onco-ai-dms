@@ -5624,7 +5624,7 @@ export default function AddPatientView({
               <div>
                 <div className="flex justify-between items-center mb-2">
                   <h4 className="h-subsection">
-                    <span className="inline-block h-2 w-2 rounded-full bg-blue-600 mr-2 align-middle" />Tumor Markers (CEA, AFP, CA 19-9, CA 125, PSA, LDH…)
+                    Tumor Markers (CEA, AFP, CA 19-9, CA 125, PSA, LDH…)
                   </h4>
                   <button
                     type="button"
@@ -5694,7 +5694,7 @@ export default function AddPatientView({
               <div>
                 <div className="flex justify-between items-center mb-2">
                   <h4 className="h-subsection">
-                    <span className="inline-block h-2 w-2 rounded-full bg-blue-600 mr-2 align-middle" />Imaging
+                    Imaging
                   </h4>
                   <button
                     type="button"
@@ -5800,7 +5800,7 @@ export default function AddPatientView({
               <div>
                 <div className="flex justify-between items-center mb-2">
                   <h4 className="h-subsection">
-                    <span className="inline-block h-2 w-2 rounded-full bg-blue-600 mr-2 align-middle" />Biopsy & Histopathology
+                    Biopsy & Histopathology
                   </h4>
                   <button
                     type="button"
@@ -5898,7 +5898,7 @@ export default function AddPatientView({
               <div>
                 <div className="flex justify-between items-center mb-2">
                   <h4 className="h-subsection">
-                    <span className="inline-block h-2 w-2 rounded-full bg-blue-600 mr-2 align-middle" />IHC
+                    IHC
                   </h4>
                   <button
                     type="button"
@@ -5975,7 +5975,7 @@ export default function AddPatientView({
                                 </label>
                                 <label className="flex flex-col gap-0.5 md:col-span-2">
                                   <span className="font-semibold text-slate-500 dark:text-slate-400">
-                                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-blue-600 mr-1 align-middle" />Interpretation
+                                    Interpretation
                                   </span>
                                   <input type="text" value={row.ihc_interpretation} onChange={(e) => handleTableChange("immunohistochemistryTable", idx, "ihc_interpretation", e.target.value)} placeholder="e.g. Luminal A-like / TNBC / dMMR-MSI-high" className={`w-full p-1 bg-theme-surface dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-[11.5px] font-bold ${row.ihc_interpretation ? "ai-priority-text" : ""}`} />
                                 </label>
@@ -6110,7 +6110,7 @@ export default function AddPatientView({
               <div>
                 <div className="flex justify-between items-center mb-2">
                   <h4 className="h-subsection">
-                    <span className="inline-block h-2 w-2 rounded-full bg-blue-600 mr-2 align-middle" />Genetic / Molecular Testing
+                    Genetic / Molecular Testing
                   </h4>
                   <button
                     type="button"
@@ -6244,7 +6244,7 @@ export default function AddPatientView({
               <div>
                 <div className="flex justify-between items-center mb-2">
                   <h4 className="h-subsection">
-                    <span className="inline-block h-2 w-2 rounded-full bg-blue-600 mr-2 align-middle" />Contrast Studies
+                    Contrast Studies
                   </h4>
                   <button
                     type="button"
@@ -6311,7 +6311,7 @@ export default function AddPatientView({
               <div>
                 <div className="flex justify-between items-center mb-2">
                   <h4 className="h-subsection">
-                    <span className="inline-block h-2 w-2 rounded-full bg-blue-600 mr-2 align-middle" />Miscellaneous Investigations
+                    Miscellaneous Investigations
                   </h4>
                   <button
                     type="button"
@@ -11004,7 +11004,7 @@ export default function AddPatientView({
               <div>
                 <div className="flex justify-between items-center mb-2">
                   <h4 className="h-subsection">
-                    <span className="inline-block h-2 w-2 rounded-full bg-blue-600 mr-2 align-middle" />Supplementary Details — Heading / Subheading / Cell
+                    Supplementary Details — Heading / Subheading / Cell
                   </h4>
                   <button
                     type="button"
