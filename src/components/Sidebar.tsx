@@ -68,7 +68,7 @@ export default function Sidebar({ activeMenu, onChangeMenu, currentUser, onSignO
       <aside className={`
         fixed inset-y-0 left-0 z-50 minimal-sidebar flex flex-col justify-between w-[260px] max-w-[85vw] p-5 transition-all duration-200
         ${menuOpen ? "translate-x-0" : "-translate-x-full"}
-        lg:translate-x-0 lg:static lg:z-auto lg:h-screen
+        lg:translate-x-0 lg:h-screen
       `} style={menuOpen ? undefined : { animation: "none" }}>
         {/* Header Branding */}
         <div>
