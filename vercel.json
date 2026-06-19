@@ -3,7 +3,7 @@
   "buildCommand": "npm run vercel-build",
   "outputDirectory": "dist",
   "functions": {
-    "api/[...path].ts": {
+    "api/index.ts": {
       "maxDuration": 300,
       "memory": 1024
     },
@@ -33,6 +33,10 @@
     {
       "source": "/api/document-fill",
       "destination": "/api/extract"
+    },
+    {
+      "source": "/api/:apiPath(.*)",
+      "destination": "/api?apiPath=:apiPath"
     }
   ],
   "headers": [

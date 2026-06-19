@@ -1,5 +1,13 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { isTrashHandlerRoute, parseApiRoute, requiresAdminRoute } from "../server-lib/api-routing.js";
+
+const vercelConfig = JSON.parse(readFileSync(new URL("../vercel.json", import.meta.url), "utf8"));
+const wildcardRewrite = vercelConfig.rewrites.find((rewrite: { source: string }) => rewrite.source === "/api/:apiPath(.*)");
+
+assert.equal(wildcardRewrite?.destination, "/api?apiPath=:apiPath");
+assert.ok(vercelConfig.functions["api/index.ts"]);
+assert.equal(vercelConfig.functions["api/[...path].ts"], undefined);
 
 assert.deepEqual(parseApiRoute("/api/patients/trash?unused=true"), {
   parts: ["patients", "trash"],

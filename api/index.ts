@@ -17,7 +17,11 @@ import { vercelAuth } from "../server-lib/auth.js";
 import { isTrashHandlerRoute, parseApiRoute, requiresAdminRoute } from "../server-lib/api-routing.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const { parts, route } = parseApiRoute(req.url!, req.headers.host);
+  const rewrittenPath = Array.isArray(req.query.apiPath)
+    ? req.query.apiPath.join("/")
+    : req.query.apiPath;
+  const requestUrl = rewrittenPath ? `/api/${rewrittenPath}` : req.url!;
+  const { parts, route } = parseApiRoute(requestUrl, req.headers.host);
 
   if (route === "favicon.ico") return res.status(204).end();
 
