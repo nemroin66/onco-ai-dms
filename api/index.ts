@@ -13,7 +13,7 @@ import storage from "../server-lib/handlers/storage.js";
 import quota from "../server-lib/handlers/quota.js";
 import analytics from "../server-lib/handlers/analytics.js";
 import users from "../server-lib/handlers/users.js";
-import { vercelAuth } from "../server-lib/auth.js";
+import { isPrivilegedRole, vercelAuth } from "../server-lib/auth.js";
 import { isTrashHandlerRoute, parseApiRoute, requiresAdminRoute } from "../server-lib/api-routing.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -29,7 +29,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!user) return;
 
   if (requiresAdminRoute(route, parts, req.method)) {
-    if (user.role !== "admin") {
+    if (!isPrivilegedRole(user.role)) {
       console.error("[admin] Access denied: user role is", user.role);
       return res.status(403).json({ error: "Administrator access required." });
     }

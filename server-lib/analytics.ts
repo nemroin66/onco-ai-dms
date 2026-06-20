@@ -629,7 +629,7 @@ export async function runAnalyticsQuery(input: unknown, userId?: string): Promis
   const spec = chartSpecSchema.parse(input);
   validateFields(spec);
   const version = await analyticsVersion();
-  const cacheKey = crypto.createHash("sha256").update(JSON.stringify({ spec, version })).digest("hex");
+  const cacheKey = crypto.createHash("sha256").update(JSON.stringify({ spec, version, accessScope: userId || "global" })).digest("hex");
   const cached = resultCache.get(cacheKey);
   if (cached && cached.expires > Date.now()) return cached.result;
 

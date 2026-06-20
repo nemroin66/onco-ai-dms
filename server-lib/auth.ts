@@ -5,11 +5,17 @@ import type { NextFunction, Request, Response } from "express";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { logAudit } from "./audit.js";
 
+export type UserRole = "admin" | "researcher" | "auditor" | "user";
+
+export function isPrivilegedRole(role: string): role is Exclude<UserRole, "user"> {
+  return role === "admin" || role === "researcher" || role === "auditor";
+}
+
 export interface AuthenticatedUser {
   uid: string;
   email: string;
   name: string;
-  role: "admin" | "user";
+  role: UserRole;
 }
 
 function parseServiceAccount() {
@@ -44,11 +50,12 @@ async function resolveUser(header: string | string[] | undefined): Promise<Authe
   const decoded = await getAuth().verifyIdToken(token, true);
   const profile = await getFirestore().collection("users").doc(decoded.uid).get();
   const data = profile.exists ? profile.data() || {} : {};
+  const storedRole = String(data.role || "");
   return {
     uid: decoded.uid,
     email: decoded.email || String(data.email || ""),
     name: String(data.name || decoded.name || decoded.email || "User"),
-    role: data.role === "admin" ? "admin" : "user",
+    role: isPrivilegedRole(storedRole) ? storedRole : "user",
   };
 }
 
@@ -85,7 +92,7 @@ export function vercelUser(req: VercelRequest) {
 }
 
 export function requireAdmin(user: AuthenticatedUser) {
-  if (user.role !== "admin") {
+  if (!isPrivilegedRole(user.role)) {
     const error = new Error("Administrator access required.");
     (error as Error & { status?: number }).status = 403;
     throw error;

@@ -7,22 +7,23 @@ import {
   runAnalyticsQuery,
   saveDashboard,
 } from "../analytics.js";
-import { vercelUser } from "../auth.js";
+import { isPrivilegedRole, vercelUser } from "../auth.js";
 import { generateAnalyticsSpec, generateStatisticalSpec } from "../analytics-prompt.js";
 
 export default async function analytics(req: VercelRequest, res: VercelResponse) {
   try {
     const user = vercelUser(req);
+    const analyticsUserId = isPrivilegedRole(user.role) ? undefined : user.uid;
     const route = String(req.query.analyticsPath || "");
 
     if (route === "catalog" && req.method === "GET") {
       return res.json({ fields: getAnalyticsCatalog() });
     }
     if (route === "query" && req.method === "POST") {
-      return res.json(await runAnalyticsQuery(req.body, user.uid));
+      return res.json(await runAnalyticsQuery(req.body, analyticsUserId));
     }
     if (route === "statistics" && req.method === "POST") {
-      return res.json(await runAdvancedStatistics(req.body, user.uid));
+      return res.json(await runAdvancedStatistics(req.body, analyticsUserId));
     }
     if (route === "statistics/prompt" && req.method === "POST") {
       const plan = await generateStatisticalSpec(String(req.body?.prompt || ""));
@@ -35,7 +36,7 @@ export default async function analytics(req: VercelRequest, res: VercelResponse)
         dateTo: req.body?.dateTo || plan.spec.dateTo,
         filters: [...plan.spec.filters, ...safeFilters],
       };
-      return res.json({ ...plan, spec, result: await runAdvancedStatistics(spec, user.uid) });
+      return res.json({ ...plan, spec, result: await runAdvancedStatistics(spec, analyticsUserId) });
     }
     if (route === "prompt" && req.method === "POST") {
       return res.json(await generateAnalyticsSpec(String(req.body?.prompt || "")));

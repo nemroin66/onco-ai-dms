@@ -1,6 +1,8 @@
+import JSZip from "jszip";
 import MANIFEST, { getExportKeyOrder, type ManifestField } from "../src/formManifest.js";
 
-type Row = Record<string, string>;
+export type FlatScalar = string | number | boolean | null;
+type FlatRow = Record<string, FlatScalar>;
 
 const SYSTEM_EXPORT_KEYS = [
   "id",
@@ -26,13 +28,30 @@ const REQUIRED_IDENTITY_KEYS = [
 ];
 
 const SYSTEM_COLUMN_LABELS: Record<string, string> = {
-  id: "Patient ID",
-  auto_id: "Auto ID",
-  createdBy: "Created By",
-  createdAt: "Created At",
-  updatedAt: "Updated At",
-  isDeleted: "Deleted",
-  driveFolderId: "Drive Folder ID",
+  id: "Patient document ID",
+  auto_id: "Registry patient ID",
+  createdBy: "Record creator user ID",
+  createdAt: "Record creation timestamp",
+  updatedAt: "Last update timestamp",
+  isDeleted: "Soft-deleted record indicator",
+  driveFolderId: "Google Drive patient folder ID",
+};
+
+const FIELD_LABEL_OVERRIDES: Record<string, string> = {
+  tp: "Telephone number",
+  nic: "National identity card number",
+  bht: "Bed head ticket / clinic book reference",
+  dob: "Date of birth",
+  bmi: "Body mass index",
+  bsa: "Body surface area",
+  ecog_status: "ECOG performance status",
+  lvi: "Lymphovascular invasion",
+  ihc_panel: "Immunohistochemistry panel",
+  ihc_marker: "Immunohistochemistry marker",
+  tnm_stage: "TNM stage",
+  icu_done: "Intensive care admission status",
+  pv_status: "Portal vein status",
+  sma_status: "Superior mesenteric artery status",
 };
 
 export type PatientExportMode = "patient-wide" | "table-row";
@@ -54,53 +73,33 @@ export interface SelectedPatientCsvOptions {
   rowSource?: string;
 }
 
+export interface PatientExportDictionaryEntry {
+  column_name: string;
+  form_section: string;
+  form_table: string;
+  row_index: string;
+  field_label: string;
+  description: string;
+  data_type: string;
+  allowed_values: string;
+  system_metadata: "yes" | "no";
+}
+
+interface ManifestDescriptor {
+  pattern: string;
+  section: string;
+  table: string;
+  label: string;
+  description: string;
+  dataType: string;
+  allowedValues: string;
+  order: number;
+}
+
 function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === "object" && !Array.isArray(value);
-}
-
-function stableJson(value: unknown) {
-  if (value === undefined || value === null) return "";
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
-  }
-}
-
-function stringifyCell(value: unknown) {
-  if (value === undefined || value === null) return "";
-  if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") return String(value);
-  return stableJson(value);
-}
-
-function flattenForCsv(value: unknown, prefix: string, row: Row, columns: Set<string>) {
-  if (!prefix) return;
-  columns.add(prefix);
-
-  if (Array.isArray(value)) {
-    row[prefix] = stableJson(value);
-    return;
-  }
-
-  if (isPlainObject(value)) {
-    const entries = Object.entries(value);
-    if (entries.length === 0) {
-      row[prefix] = "{}";
-      return;
-    }
-    row[prefix] = stableJson(value);
-    for (const [key, childValue] of entries) {
-      flattenForCsv(childValue, `${prefix}.${key}`, row, columns);
-    }
-    return;
-  }
-
-  row[prefix] = stringifyCell(value);
-}
-
-function csvEscape(value: unknown) {
-  return `"${String(value ?? "").replace(/"/g, '""')}"`;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
 }
 
 function titleCase(value: string) {
@@ -110,97 +109,217 @@ function titleCase(value: string) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function uniq(values: string[]) {
-  return Array.from(new Set(values.filter(Boolean)));
+function fieldLabel(path: string, field?: ManifestField) {
+  const key = path.split(".").pop()?.replace(/\[\]/g, "") || path;
+  return field?.label || FIELD_LABEL_OVERRIDES[key] || titleCase(key);
 }
 
-function getAtPath(value: unknown, path: string): unknown {
-  if (!path) return value;
-  const parts = path.split(".");
-  const walk = (current: unknown, index: number): unknown => {
-    if (index >= parts.length) return current;
-    if (current === undefined || current === null) return undefined;
-    const part = parts[index];
-    if (Array.isArray(current)) {
-      const collected = current.map((item) => walk(item, index));
-      const values = collected.flatMap((item) => Array.isArray(item) ? item : [item]).filter((item) => item !== undefined && item !== null && item !== "");
-      return values.length ? values : undefined;
+function fieldDescription(section: string, label: string, field?: ManifestField, repeated = false) {
+  if (field?.description) return field.description;
+  return repeated
+    ? `${label} recorded in a repeatable row of the ${section} section.`
+    : `${label} recorded in the ${section} section of the patient data form.`;
+}
+
+function buildManifestDescriptors() {
+  const descriptors: ManifestDescriptor[] = [];
+  let order = 0;
+  const visit = (
+    fields: Record<string, ManifestField>,
+    section: string,
+    prefix = "",
+    table = "",
+    repeated = false,
+  ) => {
+    for (const [name, field] of Object.entries(fields)) {
+      const path = prefix ? `${prefix}.${name}` : name;
+      const pattern = field.isArray ? `${path}[]` : path;
+      const currentTable = field.isArray ? path : table;
+      if (field.itemFields) {
+        visit(field.itemFields, section, pattern, currentTable, true);
+        continue;
+      }
+      const label = fieldLabel(pattern, field);
+      descriptors.push({
+        pattern,
+        section,
+        table: currentTable,
+        label,
+        description: fieldDescription(section, label, field, repeated || field.isArray === true),
+        dataType: field.type,
+        allowedValues: field.options?.join(" | ") || "",
+        order: order++,
+      });
     }
-    if (!isPlainObject(current)) return undefined;
-    return walk(current[part], index + 1);
   };
-  return walk(value, 0);
+  for (const section of Object.values(MANIFEST.sections)) {
+    visit(section.fields, section.label);
+  }
+  return descriptors;
 }
 
-function getArrayAtPath(value: unknown, path: string): unknown[] {
-  const found = getAtPath(value, path);
-  return Array.isArray(found) ? found : [];
+const MANIFEST_DESCRIPTORS = buildManifestDescriptors();
+const DESCRIPTOR_BY_PATTERN = new Map(MANIFEST_DESCRIPTORS.map((item) => [item.pattern, item]));
+
+function normalizeIndexedPath(path: string) {
+  return path.replace(/\[\d+\]/g, "[]");
 }
 
-function valueForSelectedPath(patient: Record<string, any>, path: string): string {
-  const value = getAtPath(patient, path);
-  return stringifyCell(value);
+function stripIndexes(path: string) {
+  return path.replace(/\[\d+\]/g, "").replace(/\[\]/g, "");
 }
 
-function fieldNode(
-  path: string,
-  label: string,
-  repeated = false,
-  repeatRoot?: string,
-  children?: PatientExportColumnNode[],
-  kind: PatientExportColumnNode["kind"] = "field",
-): PatientExportColumnNode {
-  return {
-    key: path,
-    path,
-    label,
-    kind,
-    selectable: kind === "field",
-    repeated,
-    repeatRoot,
-    children,
-  };
+function descriptorForColumn(column: string) {
+  const normalized = normalizeIndexedPath(column);
+  const exact = DESCRIPTOR_BY_PATTERN.get(normalized);
+  if (exact) return exact;
+  const withoutArrayMarkers = stripIndexes(normalized);
+  return MANIFEST_DESCRIPTORS.find((descriptor) => stripIndexes(descriptor.pattern) === withoutArrayMarkers);
 }
 
-function buildManifestFieldNodes(
-  fields: Record<string, ManifestField>,
-  prefix = "",
-  repeatRoot?: string,
-): PatientExportColumnNode[] {
+function scalarType(value: FlatScalar) {
+  if (value === null) return "null";
+  return typeof value;
+}
+
+function flattenValue(value: unknown, prefix: string, row: FlatRow) {
+  if (value === undefined || !prefix) return;
+  if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    row[prefix] = value as FlatScalar;
+    return;
+  }
+  if (typeof value === "bigint") {
+    row[prefix] = String(value);
+    return;
+  }
+  if (value instanceof Date) {
+    row[prefix] = value.toISOString();
+    return;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => flattenValue(item, `${prefix}[${index}]`, row));
+    return;
+  }
+  if (isPlainObject(value)) {
+    for (const [key, child] of Object.entries(value)) {
+      flattenValue(child, `${prefix}.${key}`, row);
+    }
+    return;
+  }
+  row[prefix] = String(value);
+}
+
+export function flattenPatient(patient: Record<string, unknown>): FlatRow {
+  const row: FlatRow = {};
+  for (const [key, value] of Object.entries(patient)) flattenValue(value, key, row);
+  return row;
+}
+
+function compareColumns(a: string, b: string) {
+  const aDescriptor = descriptorForColumn(a);
+  const bDescriptor = descriptorForColumn(b);
+  const aSystem = SYSTEM_EXPORT_KEYS.indexOf(stripIndexes(a));
+  const bSystem = SYSTEM_EXPORT_KEYS.indexOf(stripIndexes(b));
+  const aRank = aDescriptor?.order ?? (aSystem >= 0 ? 100_000 + aSystem : 200_000);
+  const bRank = bDescriptor?.order ?? (bSystem >= 0 ? 100_000 + bSystem : 200_000);
+  if (aRank !== bRank) return aRank - bRank;
+  return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+}
+
+export function buildFlatPatientExport(patients: Record<string, unknown>[]) {
+  const records = patients.map(flattenPatient);
+  const columns = new Set<string>();
+  for (const descriptor of MANIFEST_DESCRIPTORS) {
+    if (!descriptor.pattern.includes("[]")) columns.add(descriptor.pattern);
+  }
+  for (const key of SYSTEM_EXPORT_KEYS) columns.add(key);
+  for (const record of records) Object.keys(record).forEach((column) => columns.add(column));
+  const orderedColumns = Array.from(columns).sort(compareColumns);
+  return { columns: orderedColumns, records };
+}
+
+function csvEscape(value: unknown) {
+  return `"${String(value ?? "").replace(/"/g, '""')}"`;
+}
+
+function csvFromFlatRows(columns: string[], rows: FlatRow[]) {
+  return `\uFEFF${[
+    columns.map(csvEscape).join(","),
+    ...rows.map((row) => columns.map((column) => csvEscape(row[column] ?? "")).join(",")),
+  ].join("\n")}`;
+}
+
+function observedTypes(column: string, rows: FlatRow[]) {
+  const types = new Set(rows.flatMap((row) => column in row ? [scalarType(row[column])] : []));
+  return types.size ? Array.from(types).sort().join(" | ") : descriptorForColumn(column)?.dataType || "unknown";
+}
+
+export function buildPatientDataDictionary(columns: string[], rows: FlatRow[]): PatientExportDictionaryEntry[] {
+  return columns.map((column) => {
+    const descriptor = descriptorForColumn(column);
+    const indexes = Array.from(column.matchAll(/\[(\d+)\]/g), (match) => match[1]);
+    const systemKey = stripIndexes(column);
+    const systemLabel = SYSTEM_COLUMN_LABELS[systemKey];
+    const label = systemLabel || descriptor?.label || titleCase(column.split(".").pop()?.replace(/\[\d+\]/g, "") || column);
+    const section = systemLabel ? "System Metadata" : descriptor?.section || "Additional Stored Fields";
+    const table = descriptor?.table ? stripIndexes(descriptor.table) : "";
+    const rowMeaning = indexes.length ? indexes.join(" > ") : "";
+    const description = systemLabel
+      ? systemLabel
+      : descriptor?.description || `${label} stored in the patient record but not represented in the current form manifest.`;
+    return {
+      column_name: column,
+      form_section: section,
+      form_table: table,
+      row_index: rowMeaning,
+      field_label: label,
+      description: indexes.length ? `${description} Zero-based row index: ${rowMeaning}.` : description,
+      data_type: observedTypes(column, rows),
+      allowed_values: descriptor?.allowedValues || "",
+      system_metadata: systemLabel ? "yes" : "no",
+    };
+  });
+}
+
+function dictionaryCsv(entries: PatientExportDictionaryEntry[]) {
+  const columns: (keyof PatientExportDictionaryEntry)[] = [
+    "column_name", "form_section", "form_table", "row_index", "field_label",
+    "description", "data_type", "allowed_values", "system_metadata",
+  ];
+  return `\uFEFF${[
+    columns.map(csvEscape).join(","),
+    ...entries.map((entry) => columns.map((column) => csvEscape(entry[column])).join(",")),
+  ].join("\n")}`;
+}
+
+export async function buildPatientCsvPackage(patients: Record<string, unknown>[]) {
+  const { columns, records } = buildFlatPatientExport(patients);
+  const dictionary = buildPatientDataDictionary(columns, records);
+  const zip = new JSZip();
+  zip.file("patient_data_flat.csv", csvFromFlatRows(columns, records));
+  zip.file("data_dictionary.csv", dictionaryCsv(dictionary));
+  const buffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE", compressionOptions: { level: 6 } });
+  return { buffer, patientCount: patients.length, columnCount: columns.length };
+}
+
+export function buildFlatPatientJson(patients: Record<string, unknown>[]) {
+  const { columns, records } = buildFlatPatientExport(patients);
+  const normalizedRecords = records.map((record) => Object.fromEntries(columns.map((column) => [column, record[column] ?? null])));
+  return { json: JSON.stringify(normalizedRecords, null, 2), patientCount: patients.length, columnCount: columns.length };
+}
+
+function fieldNode(path: string, label: string, repeated = false, repeatRoot?: string, children?: PatientExportColumnNode[], kind: PatientExportColumnNode["kind"] = "field"): PatientExportColumnNode {
+  return { key: path, path, label, kind, selectable: kind === "field", repeated, repeatRoot, children };
+}
+
+function buildManifestFieldNodes(fields: Record<string, ManifestField>, prefix = "", repeatRoot?: string): PatientExportColumnNode[] {
   return Object.entries(fields).map(([name, field]) => {
     const path = prefix ? `${prefix}.${name}` : name;
     const currentRepeatRoot = repeatRoot || (field.isArray ? path : undefined);
-    const children = field.itemFields
-      ? buildManifestFieldNodes(field.itemFields, path, currentRepeatRoot)
-      : undefined;
-
-    if (field.isArray && children?.length) {
-      return {
-        key: path,
-        path,
-        label: titleCase(name),
-        kind: "table",
-        selectable: false,
-        repeated: true,
-        repeatRoot: currentRepeatRoot,
-        children,
-      };
-    }
-
-    if (children?.length) {
-      return {
-        key: path,
-        path,
-        label: titleCase(name),
-        kind: "group",
-        selectable: false,
-        repeated: Boolean(repeatRoot),
-        repeatRoot,
-        children,
-      };
-    }
-
-    return fieldNode(path, titleCase(name), Boolean(repeatRoot), repeatRoot);
+    const children = field.itemFields ? buildManifestFieldNodes(field.itemFields, path, currentRepeatRoot) : undefined;
+    if (field.isArray && children?.length) return { key: path, path, label: fieldLabel(path, field), kind: "table", selectable: false, repeated: true, repeatRoot: currentRepeatRoot, children };
+    if (children?.length) return { key: path, path, label: fieldLabel(path, field), kind: "group", selectable: false, repeated: Boolean(repeatRoot), repeatRoot, children };
+    return fieldNode(path, fieldLabel(path, field), Boolean(repeatRoot), repeatRoot);
   });
 }
 
@@ -220,174 +339,93 @@ function collectTableNodes(nodes: PatientExportColumnNode[], tables: PatientExpo
   return tables;
 }
 
-function discoveredPathNodes(paths: string[], knownPaths: Set<string>): PatientExportColumnNode[] {
-  return paths
-    .filter((path) => !knownPaths.has(path))
-    .sort((a, b) => a.localeCompare(b))
-    .map((path) => fieldNode(path, titleCase(path.split(".").pop() || path)));
-}
-
-function discoverPatientPaths(value: unknown, prefix: string, paths: Set<string>) {
-  if (!prefix) return;
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      if (isPlainObject(item)) {
-        for (const [key, childValue] of Object.entries(item)) {
-          discoverPatientPaths(childValue, `${prefix}.${key}`, paths);
-        }
-      }
-    }
-    return;
-  }
-  if (isPlainObject(value)) {
-    for (const [key, childValue] of Object.entries(value)) {
-      discoverPatientPaths(childValue, `${prefix}.${key}`, paths);
-    }
-    return;
-  }
-  paths.add(prefix);
-}
-
-function selectedColumnsWithIdentity(columns: string[]) {
-  return uniq([...REQUIRED_IDENTITY_KEYS, ...columns]);
-}
-
-function csvFromRows(columns: string[], rows: Row[]) {
-  const csvRows = [
-    columns.map(csvEscape).join(","),
-    ...rows.map((row) => columns.map((column) => csvEscape(row[column] ?? "")).join(",")),
-  ];
-  return `\uFEFF${csvRows.join("\n")}`;
-}
-
-export function buildPatientExportRows(patients: Record<string, any>[]) {
-  const columns = new Set<string>([
-    ...SYSTEM_EXPORT_KEYS,
-    ...getExportKeyOrder(),
-  ]);
-
-  const rows = patients.map((patient) => {
-    const row: Row = {};
-    for (const [key, value] of Object.entries(patient)) {
-      flattenForCsv(value, key, row, columns);
-    }
-    return row;
-  });
-
-  return {
-    columns: Array.from(columns),
-    rows,
-  };
-}
-
-export function buildPatientExportColumnTree(patients: Record<string, any>[] = []) {
+export function buildPatientExportColumnTree(patients: Record<string, unknown>[] = []) {
   const manifestSections: PatientExportColumnNode[] = Object.values(MANIFEST.sections).map((section) => ({
-    key: section.key,
-    path: section.key,
-    label: section.label,
-    kind: "group",
-    selectable: false,
+    key: section.key, path: section.key, label: section.label, kind: "group", selectable: false,
     children: buildManifestFieldNodes(section.fields),
   }));
-
   const knownPaths = collectLeafPaths(manifestSections);
-  for (const key of [...SYSTEM_EXPORT_KEYS, ...REQUIRED_IDENTITY_KEYS]) knownPaths.add(key);
-
-  const systemNode: PatientExportColumnNode = {
-    key: "system",
-    path: "system",
-    label: "System Metadata",
-    kind: "group",
-    selectable: false,
-    children: SYSTEM_EXPORT_KEYS.map((key) => fieldNode(key, SYSTEM_COLUMN_LABELS[key] || titleCase(key))),
-  };
-
-  const discoveredPaths = new Set<string>();
-  for (const patient of patients) {
-    for (const [key, value] of Object.entries(patient)) {
-      discoverPatientPaths(value, key, discoveredPaths);
-    }
-  }
-  const additionalChildren = discoveredPathNodes(Array.from(discoveredPaths), knownPaths);
-
+  const { columns } = buildFlatPatientExport(patients);
+  const additionalColumns = columns.filter((column) => {
+    const unindexed = stripIndexes(column);
+    return !knownPaths.has(unindexed) && !SYSTEM_EXPORT_KEYS.includes(unindexed);
+  });
   const tree = [
     ...manifestSections,
-    systemNode,
-    ...(additionalChildren.length
-      ? [{
-        key: "additionalStoredFields",
-        path: "additionalStoredFields",
-        label: "Additional Stored Fields",
-        kind: "group" as const,
-        selectable: false,
-        children: additionalChildren,
-      }]
-      : []),
+    { key: "system", path: "system", label: "System Metadata", kind: "group" as const, selectable: false, children: SYSTEM_EXPORT_KEYS.map((key) => fieldNode(key, SYSTEM_COLUMN_LABELS[key])) },
+    ...(additionalColumns.length ? [{ key: "additionalStoredFields", path: "additionalStoredFields", label: "Additional Stored Fields", kind: "group" as const, selectable: false, children: additionalColumns.map((path) => fieldNode(path, titleCase(path))) }] : []),
   ];
-
   return {
     tree,
     requiredColumns: REQUIRED_IDENTITY_KEYS,
-    defaultColumns: uniq([...REQUIRED_IDENTITY_KEYS, ...getExportKeyOrder()]),
-    tableSources: collectTableNodes(tree).map((node) => ({
-      path: node.path,
-      label: node.label,
-      repeatRoot: node.repeatRoot || node.path,
-    })),
+    defaultColumns: Array.from(new Set([...REQUIRED_IDENTITY_KEYS, ...getExportKeyOrder()])),
+    tableSources: collectTableNodes(tree).map((node) => ({ path: node.path, label: node.label, repeatRoot: node.repeatRoot || node.path })),
   };
 }
 
-export function buildSelectedPatientExportRows(
-  patients: Record<string, any>[],
-  options: SelectedPatientCsvOptions,
-) {
-  const columns = selectedColumnsWithIdentity(options.columns);
-  const mode = options.mode === "table-row" ? "table-row" : "patient-wide";
+function selectedFlatColumns(allColumns: string[], requested: string[]) {
+  const wanted = new Set([...REQUIRED_IDENTITY_KEYS, ...requested]);
+  return allColumns.filter((column) => wanted.has(column) || wanted.has(stripIndexes(column)));
+}
 
-  if (mode === "table-row") {
-    const rowSource = String(options.rowSource || "").trim();
-    if (!rowSource) throw new Error("A repeatable table row source is required for table-row CSV export.");
-    const rows: Row[] = [];
+function valueAtObjectPath(value: unknown, path: string): unknown {
+  if (!path) return value;
+  return path.split(".").reduce<unknown>((current, part) => {
+    return isPlainObject(current) ? current[part] : undefined;
+  }, value);
+}
+
+export function buildSelectedPatientExportRows(patients: Record<string, unknown>[], options: SelectedPatientCsvOptions) {
+  if (options.mode === "table-row" && options.rowSource) {
+    const rows: FlatRow[] = [];
+    const discoveredColumns = new Set<string>(REQUIRED_IDENTITY_KEYS);
     for (const patient of patients) {
-      const items = getArrayAtPath(patient, rowSource);
-      const sourceRows = items.length ? items : [undefined];
-      for (const item of sourceRows) {
-        const row: Row = {};
-        for (const column of columns) {
-          const relativePath = column.startsWith(`${rowSource}.`) ? column.slice(rowSource.length + 1) : "";
-          row[column] = relativePath && item !== undefined
-            ? stringifyCell(getAtPath(item, relativePath))
-            : valueForSelectedPath(patient, column);
+      const identity = flattenPatient(patient);
+      const source = valueAtObjectPath(patient, options.rowSource);
+      const items = Array.isArray(source) && source.length ? source : [undefined];
+      for (const item of items) {
+        const row: FlatRow = {};
+        for (const key of REQUIRED_IDENTITY_KEYS) {
+          if (key in identity) row[key] = identity[key];
         }
+        if (item !== undefined) flattenValue(item, options.rowSource, row);
+        Object.keys(row).forEach((column) => discoveredColumns.add(column));
         rows.push(row);
       }
     }
+    const columns = selectedFlatColumns(Array.from(discoveredColumns).sort(compareColumns), options.columns);
     return { columns, rows };
   }
-
-  return {
-    columns,
-    rows: patients.map((patient) => {
-      const row: Row = {};
-      for (const column of columns) row[column] = valueForSelectedPath(patient, column);
-      return row;
-    }),
-  };
+  const flat = buildFlatPatientExport(patients);
+  const columns = selectedFlatColumns(flat.columns, options.columns);
+  return { columns, rows: flat.records };
 }
 
-export function buildPatientCsv(patients: Record<string, any>[]) {
-  const { columns, rows } = buildPatientExportRows(patients);
-  return csvFromRows(columns, rows);
+export function buildPatientExportRows(patients: Record<string, unknown>[]) {
+  const { columns, records } = buildFlatPatientExport(patients);
+  return { columns, rows: records };
 }
 
-export function buildSelectedPatientCsv(
-  patients: Record<string, any>[],
-  options: SelectedPatientCsvOptions,
-) {
+export function buildPatientCsv(patients: Record<string, unknown>[]) {
+  const { columns, records } = buildFlatPatientExport(patients);
+  return csvFromFlatRows(columns, records);
+}
+
+export function buildSelectedPatientCsv(patients: Record<string, unknown>[], options: SelectedPatientCsvOptions) {
   const { columns, rows } = buildSelectedPatientExportRows(patients, options);
-  return csvFromRows(columns, rows);
+  return csvFromFlatRows(columns, rows);
 }
 
-export function patientExportFileName(extension: "csv" | "json") {
-  return `FullBackups_OncoRegistry_${new Date().toISOString().slice(0, 10)}.${extension}`;
+export async function buildSelectedPatientCsvPackage(patients: Record<string, unknown>[], options: SelectedPatientCsvOptions) {
+  const { columns, rows } = buildSelectedPatientExportRows(patients, options);
+  const dictionary = buildPatientDataDictionary(columns, rows);
+  const zip = new JSZip();
+  zip.file("patient_data_selected.csv", csvFromFlatRows(columns, rows));
+  zip.file("data_dictionary.csv", dictionaryCsv(dictionary));
+  const buffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE", compressionOptions: { level: 6 } });
+  return { buffer, patientCount: patients.length, columnCount: columns.length };
+}
+
+export function patientExportFileName(extension: "csv" | "json" | "zip", kind = "flat") {
+  return `OncoRegistry_${kind}_${new Date().toISOString().slice(0, 10)}.${extension}`;
 }

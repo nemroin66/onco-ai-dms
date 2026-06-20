@@ -97,7 +97,7 @@ function filterColumnTree(nodes: ExportColumnNode[], query: string): ExportColum
   });
 }
 
-function downloadBlobResponse(response: Response, fallbackExtension: "csv" | "json") {
+function downloadBlobResponse(response: Response, fallbackExtension: "csv" | "json" | "zip") {
   return response.blob().then((blob) => {
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
@@ -235,22 +235,34 @@ export default function SettingsView({ currentUser, onWipeDatabase, onUpdateUser
   const allSelectableCsvPaths = useMemo(() => collectSelectablePaths(csvColumns?.tree || []), [csvColumns]);
   const selectedCsvCount = selectedCsvColumns.length;
 
-  const downloadPatientExport = async (format: "csv" | "json") => {
+  const downloadPatientExport = async (format: "flat-csv" | "flat-json" | "raw-json") => {
     const response = await apiFetch(`/api/patients/export?format=${format}`);
     if (!response.ok) {
       await notify("Could not export the patient registry.", "Export Failed", "danger");
       return;
     }
-    await downloadBlobResponse(response, format);
+    const extension = format === "flat-csv" ? "zip" : "json";
+    await downloadBlobResponse(response, extension);
+    const patientCount = response.headers.get("X-Export-Patient-Count") || "0";
+    const columnCount = response.headers.get("X-Export-Column-Count") || "0";
+    const excelWarning = response.headers.get("X-Export-Excel-Column-Warning") === "true";
+    const detail = format === "raw-json"
+      ? `${patientCount} complete patient records exported in their original nested structure.`
+      : `${patientCount} patient records and ${columnCount} dedicated analysis columns exported.${excelWarning ? " This exceeds Excel's 16,384-column display limit; the downloaded file remains complete." : ""}`;
+    await notify(detail, "Export Complete", excelWarning ? "warning" : "success");
   };
 
   // CSV/JSON overall database backups
   const handleBackupAllJSON = async () => {
-    await downloadPatientExport("json");
+    await downloadPatientExport("raw-json");
+  };
+
+  const handleExportFlatJSON = async () => {
+    await downloadPatientExport("flat-json");
   };
 
   const handleBackupAllCSV = async () => {
-    await downloadPatientExport("csv");
+    await downloadPatientExport("flat-csv");
   };
 
   const loadCsvColumns = async () => {
@@ -329,8 +341,11 @@ export default function SettingsView({ currentUser, onWipeDatabase, onUpdateUser
         }),
         timeout: 0,
       });
-      await downloadBlobResponse(response, "csv");
-      await notify("Selected CSV export downloaded.", "Export Complete", "success");
+      await downloadBlobResponse(response, "zip");
+      const patientCount = response.headers.get("X-Export-Patient-Count") || "0";
+      const columnCount = response.headers.get("X-Export-Column-Count") || "0";
+      const excelWarning = response.headers.get("X-Export-Excel-Column-Warning") === "true";
+      await notify(`${patientCount} patient records and ${columnCount} columns exported with a matching data dictionary.${excelWarning ? " The file exceeds Excel's 16,384-column display limit but was not truncated." : ""}`, "Export Complete", excelWarning ? "warning" : "success");
     } catch (error) {
       await notify("Could not export the selected CSV columns.", "Export Failed", "danger");
     } finally {
@@ -340,7 +355,7 @@ export default function SettingsView({ currentUser, onWipeDatabase, onUpdateUser
 
   // Deep Wipe database
   const handleTriggerDeepWipe = async () => {
-    if (currentUser.role !== "admin") {
+    if (currentUser.role === "user") {
       await notify("Only authorized administrators can wipe the clinical records database.", "Security Alert", "danger");
       return;
     }
@@ -733,7 +748,7 @@ export default function SettingsView({ currentUser, onWipeDatabase, onUpdateUser
               >
                 <span className="flex items-center gap-2">
                   <Database className="h-4 w-4" />
-                  <span>Download Full CSV Registries</span>
+                  <span>Download Flat CSV + Data Dictionary</span>
                 </span>
                 <Download className="h-4 w-4 font-bold" />
               </button>
@@ -750,12 +765,23 @@ export default function SettingsView({ currentUser, onWipeDatabase, onUpdateUser
               </button>
  
               <button
+                onClick={handleExportFlatJSON}
+                className="btn-clr-json w-full p-3.5 flex items-center justify-between rounded-xl font-bold cursor-pointer select-none text-left transition text-xs"
+              >
+                <span className="flex items-center gap-2">
+                  <Database className="h-4 w-4" />
+                  <span>Export Flat Analysis JSON</span>
+                </span>
+                <Download className="h-4 w-4 font-bold" />
+              </button>
+
+              <button
                 onClick={handleBackupAllJSON}
                 className="btn-clr-json w-full p-3.5 flex items-center justify-between rounded-xl font-bold cursor-pointer select-none text-left transition text-xs"
               >
                 <span className="flex items-center gap-2">
                   <Database className="h-4 w-4" />
-                  <span>Export JSON Metadata Archive</span>
+                  <span>Export Raw JSON Backup</span>
                 </span>
                 <Download className="h-4 w-4 font-bold" />
               </button>
@@ -818,7 +844,7 @@ export default function SettingsView({ currentUser, onWipeDatabase, onUpdateUser
               <span>Security System Danger Zone</span>
             </h3>
             
-            {currentUser.role === "admin" ? (
+            {currentUser.role !== "user" ? (
               <button
                 onClick={handleTriggerDeepWipe}
                 className="inline-flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-theme-on-accent font-bold py-2.5 px-5 rounded-xl shadow-xs cursor-pointer select-none transition"

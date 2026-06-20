@@ -9,7 +9,7 @@ import helmet from "helmet";
 import fs from "fs";
 import path from "path";
 import { GoogleGenAI } from "@google/genai";
-import { expressAuth, expressUser, requireAdmin } from "./server-lib/auth.js";
+import { expressAuth, expressUser, isPrivilegedRole, requireAdmin } from "./server-lib/auth.js";
 import { logAudit } from "./server-lib/audit.js";
 import {
   bumpAnalyticsVersion,
@@ -24,9 +24,10 @@ import { generateAnalyticsSpec, generateStatisticalSpec } from "./server-lib/ana
 import { cleanBody, patientSchema } from "./server-lib/validate.js";
 import { ensureDriveFolder, uploadToDrive } from "./server-lib/drive.js";
 import {
-  buildPatientCsv,
+  buildFlatPatientJson,
+  buildPatientCsvPackage,
   buildPatientExportColumnTree,
-  buildSelectedPatientCsv,
+  buildSelectedPatientCsvPackage,
   patientExportFileName,
   type PatientExportMode,
 } from "./server-lib/patient-export.js";
@@ -587,7 +588,7 @@ app.get("/api/analytics/catalog", (_req, res) => {
 app.post("/api/analytics/query", async (req, res) => {
   try {
     const user = expressUser(req);
-    res.json(await runAnalyticsQuery(req.body, user.uid));
+    res.json(await runAnalyticsQuery(req.body, isPrivilegedRole(user.role) ? undefined : user.uid));
   } catch (error: any) {
     apiError(res, error, 400, "Analytics query failed.");
   }
@@ -596,7 +597,7 @@ app.post("/api/analytics/query", async (req, res) => {
 app.post("/api/analytics/statistics", async (req, res) => {
   try {
     const user = expressUser(req);
-    res.json(await runAdvancedStatistics(req.body, user.uid));
+    res.json(await runAdvancedStatistics(req.body, isPrivilegedRole(user.role) ? undefined : user.uid));
   } catch (error: any) {
     apiError(res, error, 400, "Statistical analysis failed.");
   }
@@ -612,7 +613,7 @@ app.post("/api/analytics/statistics/prompt", async (req, res) => {
       dateTo: req.body?.dateTo || plan.spec.dateTo,
       filters: [...plan.spec.filters, ...(Array.isArray(req.body?.filters) ? req.body.filters : [])],
     };
-    res.json({ ...plan, spec, result: await runAdvancedStatistics(spec, user.uid) });
+    res.json({ ...plan, spec, result: await runAdvancedStatistics(spec, isPrivilegedRole(user.role) ? undefined : user.uid) });
   } catch (error: any) {
     apiError(res, error, 400, "AI statistical analysis failed.");
   }
@@ -657,7 +658,7 @@ app.post(["/api/extract", "/api/document-fill"], async (req, res) => {
     if (patientId) {
       const patient = await getFirestoreDoc("patients", patientId);
       if (!patient) return res.status(404).json({ error: "Patient record not found." });
-      if (patient.createdBy && patient.createdBy !== expressUser(req).uid && expressUser(req).role !== "admin") {
+      if (patient.createdBy && patient.createdBy !== expressUser(req).uid && expressUser(req).role === "user") {
         return res.status(403).json({ error: "Access denied." });
       }
     }
@@ -692,8 +693,15 @@ function parseSelectedPatientExportBody(body: any) {
 async function listExportablePatients(req: any) {
   const user = expressUser(req);
   return (await listCollection("patients"))
-    .filter((patient: any) => user.role === "admin" || !patient.createdBy || patient.createdBy === user.uid)
+    .filter((patient: any) => user.role !== "user" || !patient.createdBy || patient.createdBy === user.uid)
     .sort((a: any, b: any) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
+}
+
+function setPatientExportHeaders(res: express.Response, patientCount: number, columnCount: number) {
+  res.setHeader("X-Export-Patient-Count", String(patientCount));
+  res.setHeader("X-Export-Column-Count", String(columnCount));
+  res.setHeader("X-Export-Excel-Column-Warning", columnCount > 16_384 ? "true" : "false");
+  res.setHeader("Access-Control-Expose-Headers", "Content-Disposition, X-Export-Patient-Count, X-Export-Column-Count, X-Export-Excel-Column-Warning");
 }
 
 app.get("/api/patients/export/columns", async (req, res) => {
@@ -715,9 +723,12 @@ app.post("/api/patients/export", async (req, res) => {
     if (selected.mode === "table-row" && !selected.rowSource) {
       return res.status(400).json({ error: "Select one repeatable table source for table-row CSV export." });
     }
-    res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader("Content-Disposition", `attachment; filename="${patientExportFileName("csv")}"`);
-    return res.send(buildSelectedPatientCsv(patients, selected));
+    const result = await buildSelectedPatientCsvPackage(patients, selected);
+    setPatientExportHeaders(res, result.patientCount, result.columnCount);
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", `attachment; filename="${patientExportFileName("zip", "selected-flat-csv")}"`);
+    await logAudit(expressUser(req), "patient.export", null, JSON.stringify({ format: "selected-flat-csv", scope: "active-and-deleted", patientCount: result.patientCount, columnCount: result.columnCount }));
+    return res.send(result.buffer);
   } catch (error: any) {
     apiError(res, error, 500, "Selected patient export failed.");
   }
@@ -726,17 +737,31 @@ app.post("/api/patients/export", async (req, res) => {
 app.get("/api/patients/export", async (req, res) => {
   try {
     const patients = await listExportablePatients(req);
-    const format = String(req.query.format || "csv").toLowerCase();
+    const format = String(req.query.format || "flat-csv").toLowerCase();
 
-    if (format === "json") {
+    if (format === "raw-json" || format === "json") {
+      setPatientExportHeaders(res, patients.length, 0);
       res.setHeader("Content-Type", "application/json; charset=utf-8");
-      res.setHeader("Content-Disposition", `attachment; filename="${patientExportFileName("json")}"`);
+      res.setHeader("Content-Disposition", `attachment; filename="${patientExportFileName("json", "raw-backup")}"`);
+      await logAudit(expressUser(req), "patient.export", null, JSON.stringify({ format: "raw-json", scope: "active-and-deleted", patientCount: patients.length }));
       return res.send(JSON.stringify(patients, null, 2));
     }
 
-    res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader("Content-Disposition", `attachment; filename="${patientExportFileName("csv")}"`);
-    return res.send(buildPatientCsv(patients));
+    if (format === "flat-json") {
+      const result = buildFlatPatientJson(patients);
+      setPatientExportHeaders(res, result.patientCount, result.columnCount);
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="${patientExportFileName("json", "flat-analysis")}"`);
+      await logAudit(expressUser(req), "patient.export", null, JSON.stringify({ format: "flat-json", scope: "active-and-deleted", patientCount: result.patientCount, columnCount: result.columnCount }));
+      return res.send(result.json);
+    }
+
+    const result = await buildPatientCsvPackage(patients);
+    setPatientExportHeaders(res, result.patientCount, result.columnCount);
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", `attachment; filename="${patientExportFileName("zip", "flat-csv")}"`);
+    await logAudit(expressUser(req), "patient.export", null, JSON.stringify({ format: "flat-csv", scope: "active-and-deleted", patientCount: result.patientCount, columnCount: result.columnCount }));
+    return res.send(result.buffer);
   } catch (error: any) {
     apiError(res, error, 500, "Patient export failed.");
   }
@@ -756,7 +781,7 @@ app.get("/api/patients", async (req, res) => {
     const user = expressUser(req);
 
     let filteredPatients = (includeDeleted ? patients : patients.filter((p: any) => !p.isDeleted))
-      .filter((p: any) => !p.createdBy || p.createdBy === user.uid || user.role === "admin");
+      .filter((p: any) => !p.createdBy || p.createdBy === user.uid || user.role !== "user");
     if (oncologyFilter) filteredPatients = filteredPatients.filter((p: any) => p.oncology === oncologyFilter);
     if (bhtFilter) filteredPatients = filteredPatients.filter((p: any) => p.bht === bhtFilter);
     if (statusFilter) filteredPatients = filteredPatients.filter((p: any) => p.status === statusFilter);
@@ -794,7 +819,7 @@ app.delete("/api/patients/:id/permanent", async (req, res) => {
     const patient = await getFirestoreDoc("patients", id);
     if (!patient) return res.status(404).json({ error: "Patient not found." });
     if (!patient.isDeleted) return res.status(400).json({ error: "Patient must be moved to trash before permanent deletion." });
-    if (patient.createdBy && patient.createdBy !== expressUser(req).uid && expressUser(req).role !== "admin") {
+    if (patient.createdBy && patient.createdBy !== expressUser(req).uid && expressUser(req).role === "user") {
       return res.status(403).json({ error: "Access denied." });
     }
 
@@ -841,7 +866,7 @@ app.put("/api/patients/:id", async (req, res) => {
   try {
     const id = req.params.id;
     const existing = await getFirestoreDoc("patients", id);
-    if (existing?.createdBy && existing.createdBy !== expressUser(req).uid && expressUser(req).role !== "admin") {
+    if (existing?.createdBy && existing.createdBy !== expressUser(req).uid && expressUser(req).role === "user") {
       return res.status(403).json({ error: "Access denied." });
     }
     const safeBody = cleanBody(req.body);
@@ -862,7 +887,7 @@ app.delete("/api/patients/:id", async (req, res) => {
     const id = req.params.id;
     const patient = await getFirestoreDoc("patients", id);
     if (!patient) return res.status(404).json({ error: "Patient not found." });
-    if (patient.createdBy && patient.createdBy !== expressUser(req).uid && expressUser(req).role !== "admin") {
+    if (patient.createdBy && patient.createdBy !== expressUser(req).uid && expressUser(req).role === "user") {
       return res.status(403).json({ error: "Access denied." });
     }
 
@@ -894,7 +919,7 @@ app.get("/api/patients/trash", async (req, res) => {
     const user = expressUser(req);
     const patients = await listCollection("patients");
     const deletedPatients = patients.filter((p: any) => 
-      p.isDeleted && (!p.createdBy || p.createdBy === user.uid || user.role === "admin")
+      p.isDeleted && (!p.createdBy || p.createdBy === user.uid || user.role !== "user")
     );
     deletedPatients.sort((a: any, b: any) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
     res.json(deletedPatients);
@@ -908,7 +933,7 @@ app.post("/api/patients/:id/restore", async (req, res) => {
     const id = req.params.id;
     const patient = await getFirestoreDoc("patients", id);
     if (!patient || !patient.isDeleted) return res.status(404).json({ error: "Deleted patient not found." });
-    if (patient.createdBy && patient.createdBy !== expressUser(req).uid && expressUser(req).role !== "admin") {
+    if (patient.createdBy && patient.createdBy !== expressUser(req).uid && expressUser(req).role === "user") {
       return res.status(403).json({ error: "Access denied." });
     }
 
@@ -947,7 +972,7 @@ app.get("/api/files", async (req, res) => {
     const allPatients = await listCollection("patients");
     const visibleIds = new Set(
       allPatients
-        .filter((p: any) => !p.createdBy || p.createdBy === user.uid || user.role === "admin")
+        .filter((p: any) => !p.createdBy || p.createdBy === user.uid || user.role !== "user")
         .map((p: any) => p.id)
     );
     return res.json(files.filter((f: any) => visibleIds.has(f.patientId)));
@@ -961,7 +986,7 @@ app.post("/api/files", async (req, res) => {
     const patients = await listCollection("patients");
     const patient = patients.find((p: any) => p.id === req.body.patientId);
     if (!patient) return res.status(404).json({ error: "Patient record not found." });
-    if (patient.createdBy && patient.createdBy !== expressUser(req).uid && expressUser(req).role !== "admin") {
+    if (patient.createdBy && patient.createdBy !== expressUser(req).uid && expressUser(req).role === "user") {
       return res.status(403).json({ error: "Access denied." });
     }
     const folderId = await ensureDriveFolder(patient);
@@ -1077,10 +1102,10 @@ app.get("/api/quota", (req, res) => {
   const user = expressUser(req);
   const configuredKeys = [primaryGeminiKey, secondaryGeminiKey].filter(Boolean).length;
   const info = {
-    configuredKeys: user.role === "admin" ? configuredKeys : (configuredKeys ? 1 : 0),
-    requestsMade: user.role === "admin" ? geminiRequestCount : undefined,
-    quotaLimit: user.role === "admin" ? 1500 * Math.max(configuredKeys, 1) : undefined,
-    quotaRemainingEstimate: user.role === "admin" ? Math.max(0, 1500 * Math.max(configuredKeys, 1) - geminiRequestCount) : undefined,
+    configuredKeys: user.role !== "user" ? configuredKeys : (configuredKeys ? 1 : 0),
+    requestsMade: user.role !== "user" ? geminiRequestCount : undefined,
+    quotaLimit: user.role !== "user" ? 1500 * Math.max(configuredKeys, 1) : undefined,
+    quotaRemainingEstimate: user.role !== "user" ? Math.max(0, 1500 * Math.max(configuredKeys, 1) - geminiRequestCount) : undefined,
     resetDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split("T")[0],
     status: configuredKeys ? "Active" : "No Gemini key configured",
   };
@@ -1107,7 +1132,7 @@ app.post("/api/chat", async (req, res) => {
     const fetched = await getFirestoreDoc("patients", patient.id);
     if (!fetched) return res.status(404).json({ error: "Patient not found." });
     const userInfo = expressUser(req);
-    if (fetched.createdBy && fetched.createdBy !== userInfo.uid && userInfo.role !== "admin") {
+    if (fetched.createdBy && fetched.createdBy !== userInfo.uid && userInfo.role === "user") {
       return res.status(403).json({ error: "Access denied to this patient's records." });
     }
     if (fetched.consent_ai_processing === false) {

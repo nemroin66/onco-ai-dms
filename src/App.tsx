@@ -30,12 +30,13 @@ function AppContent() {
       try {
         const profileRes = await apiFetch("/api/users");
         const profile = profileRes.ok ? await profileRes.json() : {};
+        const role = ["admin", "researcher", "auditor"].includes(profile?.role) ? profile.role : "user";
         setCurrentUser({
           uid: firebaseUser.uid,
           name: profile?.name || firebaseUser.displayName || firebaseUser.email || "User",
           email: firebaseUser.email || profile?.email || "",
-          role: profile?.role === "admin" ? "admin" : "user",
-          avatarColor: profile?.role === "admin" ? "bg-blue-600" : "bg-green-600",
+          role,
+          avatarColor: role !== "user" ? "bg-blue-600" : "bg-green-600",
         });
       } finally {
         setAuthReady(true);
@@ -259,7 +260,7 @@ function AppContent() {
     setActiveMenu("Home");
   }, []);
 
-  const handleUpdateUser = useCallback((updates: { name?: string; role?: "admin" | "user" }) => {
+  const handleUpdateUser = useCallback((updates: { name?: string; role?: "admin" | "researcher" | "auditor" | "user" }) => {
     if (updates.name) {
       setCurrentUser((prev) => prev ? { ...prev, name: updates.name! } : prev);
     }

@@ -2270,6 +2270,15 @@ All requested features implemented, tested, and ready for production deployment.
 
 ## ⚠️ Important Reminders
 
+### Analysis-ready patient exports
+
+- **Flat CSV package** downloads a ZIP containing `patient_data_flat.csv` and `data_dictionary.csv`. Every scalar value, including values in repeatable tables, receives an indexed column such as `imagingTable[0].imaging_date`.
+- **Flat JSON** contains the same one-row-per-patient analysis shape while preserving scalar JSON types.
+- **Raw JSON backup** preserves the original nested Firestore record structure for backup and restoration.
+- Full exports contain active and soft-deleted records. The `isDeleted` column identifies record state.
+- Firestore user profiles may use `admin`, `researcher`, or `auditor` for full-database access. These roles have the same privileges; `user` remains restricted to records it created.
+- CSV data is never truncated. Excel displays at most 16,384 columns, so the app warns when a complete export exceeds that limit.
+
 ### Security
 - 🔒 Never commit .env file
 - 🔒 Never share Firebase service account JSON publicly
@@ -2304,4 +2313,3 @@ All code is production-ready. All documentation is comprehensive. All deployment
 **Last Updated**: 2024
 **Estimated Deployment Time**: 90 minutes
 **Support**: See documentation guides
-

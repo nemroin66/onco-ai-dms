@@ -14,7 +14,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const user = vercelUser(req);
       const patient = await getFirestoreDoc("patients", id as string);
       if (!patient) return res.status(404).json({ error: "Patient not found." });
-      if (patient.createdBy && patient.createdBy !== user.uid && user.role !== "admin") {
+      if (patient.createdBy && patient.createdBy !== user.uid && user.role === "user") {
         return res.status(403).json({ error: "Access denied." });
       }
       const safeBody = cleanBody(req.body);
@@ -37,7 +37,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const user = vercelUser(req);
       const patient = await getFirestoreDoc("patients", id as string);
       if (!patient) return res.status(404).json({ error: "Patient not found." });
-      if (patient.createdBy && patient.createdBy !== user.uid && user.role !== "admin") {
+      if (patient.createdBy && patient.createdBy !== user.uid && user.role === "user") {
         return res.status(403).json({ error: "Access denied." });
       }
 

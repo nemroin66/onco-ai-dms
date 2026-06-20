@@ -1,5 +1,9 @@
 export interface ManifestField {
   type: "text" | "number" | "date" | "select" | "textarea" | "multi-select" | "radio" | "readonly" | "checkbox-group";
+  /** Human-readable export label. Falls back to a title-cased field name. */
+  label?: string;
+  /** Plain-language data dictionary definition. Falls back to section context. */
+  description?: string;
   options?: string[];
   dependsOn?: string;
   isArray?: boolean;

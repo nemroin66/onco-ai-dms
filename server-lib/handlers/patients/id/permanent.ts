@@ -15,7 +15,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!patient.isDeleted) return res.status(400).json({ error: "Patient must be moved to trash before permanent deletion." });
 
       const user = vercelUser(req);
-      if (patient.createdBy && patient.createdBy !== user.uid && user.role !== "admin") {
+      if (patient.createdBy && patient.createdBy !== user.uid && user.role === "user") {
         return res.status(403).json({ error: "Access denied." });
       }
 

@@ -25,7 +25,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const limit = Math.min(Math.max(Number(req.query.limit) || 500, 1), 5000);
 
       const where: { field: string; op: any; value: any }[] = [];
-      if (user.role !== "admin") where.push({ field: "createdBy", op: "==", value: user.uid });
+      if (user.role === "user") where.push({ field: "createdBy", op: "==", value: user.uid });
       if (oncologyFilter) where.push({ field: "oncology", op: "==", value: oncologyFilter });
       if (bhtFilter) where.push({ field: "bht", op: "==", value: bhtFilter });
       if (statusFilter) where.push({ field: "status", op: "==", value: statusFilter });

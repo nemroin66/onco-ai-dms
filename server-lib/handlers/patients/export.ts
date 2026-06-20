@@ -1,13 +1,15 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { listCollection } from "../../firebase.js";
-import { vercelUser } from "../../auth.js";
+import { isPrivilegedRole, vercelUser } from "../../auth.js";
 import {
-  buildPatientCsv,
+  buildFlatPatientJson,
+  buildPatientCsvPackage,
   buildPatientExportColumnTree,
-  buildSelectedPatientCsv,
+  buildSelectedPatientCsvPackage,
   patientExportFileName,
   type PatientExportMode,
 } from "../../patient-export.js";
+import { logAudit } from "../../audit.js";
 
 function parseSelectedExportBody(body: any) {
   if (typeof body === "string") {
@@ -29,7 +31,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "GET" && req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
   try {
     const user = vercelUser(req);
-    const where = user.role === "admin" ? [] : [{ field: "createdBy", op: "==" as const, value: user.uid }];
+    const where = isPrivilegedRole(user.role) ? [] : [{ field: "createdBy", op: "==" as const, value: user.uid }];
     const patients = (await listCollection("patients", { where }))
       .sort((a: any, b: any) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
 
@@ -45,24 +47,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (selected.mode === "table-row" && !selected.rowSource) {
         return res.status(400).json({ error: "Select one repeatable table source for table-row CSV export." });
       }
-      res.setHeader("Content-Type", "text/csv; charset=utf-8");
-      res.setHeader("Content-Disposition", `attachment; filename="${patientExportFileName("csv")}"`);
-      return res.status(200).send(buildSelectedPatientCsv(patients, selected));
+      const result = await buildSelectedPatientCsvPackage(patients, selected);
+      setExportHeaders(res, result.patientCount, result.columnCount);
+      res.setHeader("Content-Type", "application/zip");
+      res.setHeader("Content-Disposition", `attachment; filename="${patientExportFileName("zip", "selected-flat-csv")}"`);
+      await logAudit(user, "patient.export", null, JSON.stringify({ format: "selected-flat-csv", scope: "active-and-deleted", patientCount: result.patientCount, columnCount: result.columnCount }));
+      return res.status(200).send(result.buffer);
     }
 
-    const format = String(req.query.format || "csv").toLowerCase();
+    const format = String(req.query.format || "flat-csv").toLowerCase();
 
-    if (format === "json") {
+    if (format === "raw-json" || format === "json") {
       res.setHeader("Content-Type", "application/json; charset=utf-8");
-      res.setHeader("Content-Disposition", `attachment; filename="${patientExportFileName("json")}"`);
+      res.setHeader("Content-Disposition", `attachment; filename="${patientExportFileName("json", "raw-backup")}"`);
+      setExportHeaders(res, patients.length, 0);
+      await logAudit(user, "patient.export", null, JSON.stringify({ format: "raw-json", scope: "active-and-deleted", patientCount: patients.length }));
       return res.status(200).send(JSON.stringify(patients, null, 2));
     }
 
-    res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader("Content-Disposition", `attachment; filename="${patientExportFileName("csv")}"`);
-    return res.status(200).send(buildPatientCsv(patients));
+    if (format === "flat-json") {
+      const result = buildFlatPatientJson(patients);
+      setExportHeaders(res, result.patientCount, result.columnCount);
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="${patientExportFileName("json", "flat-analysis")}"`);
+      await logAudit(user, "patient.export", null, JSON.stringify({ format: "flat-json", scope: "active-and-deleted", patientCount: result.patientCount, columnCount: result.columnCount }));
+      return res.status(200).send(result.json);
+    }
+
+    const result = await buildPatientCsvPackage(patients);
+    setExportHeaders(res, result.patientCount, result.columnCount);
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", `attachment; filename="${patientExportFileName("zip", "flat-csv")}"`);
+    await logAudit(user, "patient.export", null, JSON.stringify({ format: "flat-csv", scope: "active-and-deleted", patientCount: result.patientCount, columnCount: result.columnCount }));
+    return res.status(200).send(result.buffer);
   } catch (error: any) {
     console.error("[patients/export] Error:", error?.message || error);
     return res.status(500).json({ error: "Patient export failed." });
   }
+}
+
+function setExportHeaders(res: VercelResponse, patientCount: number, columnCount: number) {
+  res.setHeader("X-Export-Patient-Count", String(patientCount));
+  res.setHeader("X-Export-Column-Count", String(columnCount));
+  res.setHeader("X-Export-Excel-Column-Warning", columnCount > 16_384 ? "true" : "false");
+  res.setHeader("Access-Control-Expose-Headers", "Content-Disposition, X-Export-Patient-Count, X-Export-Column-Count, X-Export-Excel-Column-Warning");
 }

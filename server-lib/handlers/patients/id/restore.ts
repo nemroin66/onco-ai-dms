@@ -13,7 +13,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!patient || !patient.isDeleted) return res.status(404).json({ error: "Deleted patient not found." });
 
       const user = vercelUser(req);
-      if (patient.createdBy && patient.createdBy !== user.uid && user.role !== "admin") {
+      if (patient.createdBy && patient.createdBy !== user.uid && user.role === "user") {
         return res.status(403).json({ error: "Access denied." });
       }
 

@@ -6,7 +6,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
   try {
     const user = vercelUser(req);
-    const isAdmin = user.role === "admin";
+    const isAdmin = user.role !== "user";
     const [totalSnap, deletedSnap] = await Promise.all([
       db().collection("patients").count().get(),
       db().collection("patients").where("isDeleted", "==", true).count().get(),

@@ -10,7 +10,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       const user = vercelUser(req);
       const where: { field: string; op: any; value: any }[] = [{ field: "isDeleted", op: "==", value: true }];
-      if (user.role !== "admin") where.push({ field: "createdBy", op: "==", value: user.uid });
+      if (user.role === "user") where.push({ field: "createdBy", op: "==", value: user.uid });
       let patients = await listCollection("patients", { where });
       patients.sort((a: any, b: any) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
       return res.json(patients);
@@ -24,7 +24,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === "POST") {
     try {
       const user = vercelUser(req);
-      if (user.role !== "admin") return res.status(403).json({ error: "Admin access required." });
+      if (user.role === "user") return res.status(403).json({ error: "Admin access required." });
       const patients = await listCollection("patients");
       const deletedPatients = patients.filter((p: any) => p.isDeleted);
 

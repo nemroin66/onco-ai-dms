@@ -17,7 +17,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const FILE_FIELDS = ["id", "patientId", "name", "mimeType", "size", "uploadDate", "driveFileId", "webViewLink", "webContentLink", "driveFolderId"];
       const files = await listCollection("files", { select: FILE_FIELDS });
       const patientWhere: { field: string; op: any; value: any }[] = [];
-      if (user.role !== "admin") patientWhere.push({ field: "createdBy", op: "==", value: user.uid });
+      if (user.role === "user") patientWhere.push({ field: "createdBy", op: "==", value: user.uid });
       const allPatients = (await listCollection("patients", { where: patientWhere, select: ["id", "createdBy", "isDeleted"] })).filter((p: any) => p.isDeleted !== true);
       const visiblePatientIds = new Set(allPatients.map((p: any) => p.id));
       return res.json(files.filter((f: any) => visiblePatientIds.has(f.patientId)));
@@ -33,7 +33,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const user = vercelUser(req);
       const patient = await getFirestoreDoc("patients", req.body.patientId);
       if (!patient) return res.status(404).json({ error: "Patient record not found." });
-      if (patient.createdBy && patient.createdBy !== user.uid && user.role !== "admin") {
+      if (patient.createdBy && patient.createdBy !== user.uid && user.role === "user") {
         return res.status(403).json({ error: "Access denied." });
       }
       

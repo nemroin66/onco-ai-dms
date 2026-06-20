@@ -28,7 +28,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const fetched = await getFirestoreDoc("patients", patientId);
     if (fetched) {
       const user = vercelUser(req);
-      if (fetched.createdBy && fetched.createdBy !== user.uid && user.role !== "admin") {
+      if (fetched.createdBy && fetched.createdBy !== user.uid && user.role === "user") {
         return res.status(403).json({ error: "Access denied to this patient's records." });
       }
       if (fetched.consent_ai_processing === false) {
