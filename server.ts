@@ -581,6 +581,35 @@ app.get("/api/health", (_req, res) => {
 
 app.use("/api", expressAuth);
 
+app.get("/api/users", async (req, res) => {
+  try {
+    const user = expressUser(req);
+    const profile = await getFirestoreDoc("users", user.uid);
+    res.json(profile || { name: user.name, email: user.email, role: user.role });
+  } catch (error: any) {
+    apiError(res, error, 500, "Failed to load user profile.");
+  }
+});
+
+app.patch("/api/users", async (req, res) => {
+  try {
+    const user = expressUser(req);
+    const { name } = req.body || {};
+    if (name !== undefined && (typeof name !== "string" || !name.trim())) {
+      return res.status(400).json({ error: "Name must be a non-empty string." });
+    }
+    const updates: Record<string, unknown> = {};
+    if (name !== undefined) updates.name = name.trim();
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: "No valid fields to update." });
+    }
+    await saveDocument("users", user.uid, updates);
+    res.json({ ...updates });
+  } catch (error: any) {
+    apiError(res, error, 500, "Failed to update user profile.");
+  }
+});
+
 app.get("/api/analytics/catalog", (_req, res) => {
   res.json({ fields: getAnalyticsCatalog() });
 });
